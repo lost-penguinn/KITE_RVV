@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -25,6 +26,16 @@ void RegisterFile::Reset()
     fpr_.fill(0.0);
     csr_.fill(0);
     csr_[0x002] = 0b000; // Default: RNE (IEEE 754)
+
+    // Vector state: all registers zero, vl = 0, vtype = illegal (vill set) until the first
+    // vsetvli runs, as the RVV spec requires. vlenb is a read-only constant.
+    for (auto &v : vpr_)
+        v.fill(0);
+    csr_[vconst::kCsrVstart] = 0;
+    csr_[vconst::kCsrVl] = 0;
+    csr_[vconst::kCsrVtype] = vconst::kVtypeVill;
+    csr_[vconst::kCsrVlenb] = vconst::kVlenBytes;
+
     emit registerResetSignal();
 }
 
@@ -85,6 +96,58 @@ std::vector<uint64_t> RegisterFile::GetGprValues() const
 std::vector<uint64_t> RegisterFile::GetFprValues() const
 {
     return {fpr_.begin(), fpr_.end()};
+}
+
+std::array<uint8_t, vconst::kVlenBytes> RegisterFile::ReadVreg(size_t reg) const
+{
+    if (reg >= vconst::kNumVectorRegs)
+        throw std::out_of_range("Invalid vector register index");
+    return vpr_[reg];
+}
+
+void RegisterFile::WriteVreg(size_t reg, const std::array<uint8_t, vconst::kVlenBytes> &bytes)
+{
+    if (reg >= vconst::kNumVectorRegs)
+        throw std::out_of_range("Invalid vector register index");
+    vpr_[reg] = bytes;
+    emit updateVRegister(reg);
+}
+
+static void CheckSew(size_t sew_bytes)
+{
+    // power of two in {1,2,4,8}; guarantees an element never straddles two registers
+    if (sew_bytes == 0 || sew_bytes > 8 || (sew_bytes & (sew_bytes - 1)) != 0)
+        throw std::invalid_argument("Invalid element width in bytes");
+}
+
+uint64_t RegisterFile::ReadVectorElement(size_t base_reg, size_t sew_bytes, size_t index) const
+{
+    CheckSew(sew_bytes);
+    const size_t byte_offset = index * sew_bytes;
+    const size_t reg = base_reg + byte_offset / vconst::kVlenBytes;
+    const size_t in_reg = byte_offset % vconst::kVlenBytes;
+    if (reg >= vconst::kNumVectorRegs)
+        throw std::out_of_range("Vector element outside register file");
+
+    uint64_t value = 0;
+    for (size_t i = 0; i < sew_bytes; ++i)
+        value |= static_cast<uint64_t>(vpr_[reg][in_reg + i]) << (8 * i);
+    return value;
+}
+
+void RegisterFile::WriteVectorElement(size_t base_reg, size_t sew_bytes, size_t index,
+                                      uint64_t value)
+{
+    CheckSew(sew_bytes);
+    const size_t byte_offset = index * sew_bytes;
+    const size_t reg = base_reg + byte_offset / vconst::kVlenBytes;
+    const size_t in_reg = byte_offset % vconst::kVlenBytes;
+    if (reg >= vconst::kNumVectorRegs)
+        throw std::out_of_range("Vector element outside register file");
+
+    for (size_t i = 0; i < sew_bytes; ++i)
+        vpr_[reg][in_reg + i] = static_cast<uint8_t>((value >> (8 * i)) & 0xFF);
+    emit updateVRegister(reg);
 }
 
 void RegisterFile::ModifyRegister(const std::string &reg_name, uint64_t value)
@@ -188,5 +251,24 @@ bool IsValidFloatingPointRegister(const std::string &reg)
 bool IsValidCsr(const std::string &reg)
 {
     return valid_csr_registers.find(reg) != valid_csr_registers.end();
+}
+
+bool IsValidVectorRegister(const std::string &reg)
+{
+    if (reg.size() < 2 || reg.size() > 3 || reg[0] != 'v')
+        return false;
+    for (size_t i = 1; i < reg.size(); ++i)
+        if (reg[i] < '0' || reg[i] > '9')
+            return false;
+    if (reg.size() == 3 && reg[1] == '0') // reject "v01"
+        return false;
+    return std::stoi(reg.substr(1)) < static_cast<int>(vconst::kNumVectorRegs);
+}
+
+size_t VectorRegisterIndex(const std::string &reg)
+{
+    if (!IsValidVectorRegister(reg))
+        throw std::invalid_argument("Invalid vector register: " + reg);
+    return static_cast<size_t>(std::stoi(reg.substr(1)));
 }
 }//namespace Kites

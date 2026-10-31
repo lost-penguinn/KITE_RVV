@@ -60,6 +60,8 @@ class RVSSProcessor : public ProcessorBase
     void ExecuteFloat();
     void ExecuteDouble();
     void ExecuteCsr();
+    void ExecuteVector();
+    void ExecuteVsetvli();
     void HandleSyscall();
 
     void WriteMemory();

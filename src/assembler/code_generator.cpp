@@ -8,6 +8,8 @@
 #include "code_generator.h"
 #include "common/instructions.h"
 
+#include "processor/registers.h"
+#include "common/vector_defs.h"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -358,6 +360,44 @@ uint32_t generateFDSTypeMachineCode(const ICUnit &block)
     return machineCode;
 }
 
+uint32_t generateVSetVliMachineCode(const ICUnit &block)
+{
+    const uint32_t rd =
+    static_cast<uint32_t>(std::stoi(block.getRd().substr(1)));
+
+const uint32_t rs1 =
+    static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
+
+    const uint32_t zimm =
+        static_cast<uint32_t>(std::stoul(block.getImm(), nullptr, 0));
+
+    if (rd > 31 || rs1 > 31 || zimm > 0x7FF)
+        throw std::runtime_error("Invalid vsetvli operands");
+
+    if (!vec::isLegalVtype(zimm))
+        throw std::runtime_error("Illegal vtype immediate");
+
+    return (zimm << 20)
+         | (rs1 << 15)
+         | (0b111 << 12)
+         | (rd << 7)
+         | 0b1010111;
+}
+
+uint32_t generateVAddVvMachineCode(const ICUnit &block)
+{
+    const uint32_t vd = VectorRegisterIndex(block.getRd());
+    const uint32_t vs2 = VectorRegisterIndex(block.getRs2());
+    const uint32_t vs1 = VectorRegisterIndex(block.getRs1());
+
+   return (1u << 25) |
+       (vs2 << 20) |
+       (vs1 << 15) |
+       (0b000 << 12) |
+       (vd << 7) |
+       0b1010111;
+}
+
 std::vector<uint32_t>
 generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode)
 {
@@ -366,7 +406,15 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
     {
         const ICUnit &block = pair.first;
         uint32_t code;
-        if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
+        if (block.getOpcode() == "vsetvli")
+{
+    code = generateVSetVliMachineCode(block);
+}
+else if (block.getOpcode() == "vadd.vv")
+{
+    code = generateVAddVvMachineCode(block);
+}
+else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
         {
             code = generateRTypeMachineCode(block);
         }

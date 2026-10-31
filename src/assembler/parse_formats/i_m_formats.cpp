@@ -89,7 +89,8 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
         block.setInstructionIndex(instruction_index_);
         std::string reg;
 
-        if (instruction_set::isValidITypeInstruction(block.getOpcode()))
+        if (instruction_set::isValidITypeInstruction(block.getOpcode()) ||
+    block.getOpcode() == "vsetvli")
         {
             reg = reg_alias_to_name.at(peekToken(1).value);
             block.setRd(reg);

@@ -30,6 +30,8 @@
 #include <stack>
 #include <string>
 #include <vector>
+#include <array>
+#include <cstdint>
 
 namespace Kites
 {
@@ -51,6 +53,9 @@ struct RegisterChange
     unsigned int reg_type; // 0 for GPR, 1 for CSR, 2 for FPR
     uint64_t old_value;
     uint64_t new_value;
+
+        std::array<uint8_t, 16> old_vector{};
+    std::array<uint8_t, 16> new_vector{};
 };
 
 struct MemoryChange

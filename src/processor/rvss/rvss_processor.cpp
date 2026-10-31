@@ -5,7 +5,7 @@
  */
 
 #include "processor/rvss/rvss_processor.h"
-
+#include "common/vector_defs.h"
 #include "common/instructions.h"
 #include "config/config.h"
 #include "common/globals.h"
@@ -199,7 +199,17 @@ void RVSSProcessor::Execute()
         ExecuteCsr();
         return;
     }
+    else if (opcode == 0b1010111)
+{
+    uint8_t funct3 = (current_instruction_ >> 12) & 0x7;
 
+    if (funct3 == 0b111)
+        ExecuteVsetvli();
+    else
+        ExecuteVector();
+
+    return;
+}
     uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
     uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
 
@@ -901,6 +911,125 @@ void RVSSProcessor::WriteBack()
         current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
     }
 }
+void RVSSProcessor::ExecuteVsetvli()
+{
+    uint8_t rd = (current_instruction_ >> 7) & 0x1F;
+    uint8_t rs1 = (current_instruction_ >> 15) & 0x1F;
+    uint32_t zimm = (current_instruction_ >> 20) & 0x7FF;
+
+    if (!vec::isLegalVtype(zimm))
+    {
+        registers_.WriteCsr(vconst::kCsrVtype, vconst::kVtypeVill);
+        registers_.WriteCsr(vconst::kCsrVl, 0);
+        return;
+    }
+
+    uint64_t avl = (rs1 == 0) ? vec::vlmax(zimm)
+                             : registers_.ReadGpr(rs1);
+
+    uint64_t new_vl = std::min(avl, vec::vlmax(zimm));
+
+    uint64_t old_rd = registers_.ReadGpr(rd);
+    uint64_t old_vtype = registers_.ReadCsr(vconst::kCsrVtype);
+    uint64_t old_vl = registers_.ReadCsr(vconst::kCsrVl);
+
+    registers_.WriteCsr(vconst::kCsrVtype, zimm);
+    registers_.WriteCsr(vconst::kCsrVl, new_vl);
+
+    if (old_vtype != zimm)
+        current_delta_.register_changes.push_back(
+            {vconst::kCsrVtype, 1, old_vtype, zimm});
+
+    if (old_vl != new_vl)
+        current_delta_.register_changes.push_back(
+            {vconst::kCsrVl, 1, old_vl, new_vl});
+
+    if (rd != 0)
+    {
+        registers_.WriteGpr(rd, new_vl);
+
+        if (old_rd != new_vl)
+            current_delta_.register_changes.push_back(
+                {rd, 0, old_rd, new_vl});
+    }
+}   
+void RVSSProcessor::ExecuteVector()
+{
+    uint8_t opcode = current_instruction_ & 0x7F;
+    uint8_t funct3 = (current_instruction_ >> 12) & 0x7;
+    uint8_t funct6 = (current_instruction_ >> 26) & 0x3F;
+
+    uint8_t vm  = (current_instruction_ >> 25) & 0x1;
+    uint8_t vd  = (current_instruction_ >> 7) & 0x1F;
+    uint8_t vs1 = (current_instruction_ >> 15) & 0x1F;
+    uint8_t vs2 = (current_instruction_ >> 20) & 0x1F;
+
+    // Only vadd.vv for now.
+    if (opcode != 0x57 || funct6 != 0 || funct3 != 0)
+    {
+        std::cerr << "Unsupported vector instruction\n";
+        return;
+    }
+
+    // Masking is not implemented yet.
+    if (vm != 1)
+    {
+        std::cerr << "Masked vector instructions are not supported yet\n";
+        return;
+    }
+
+    uint64_t vl = registers_.ReadCsr(vconst::kCsrVl);
+    uint64_t raw_vtype = registers_.ReadCsr(vconst::kCsrVtype);
+
+    vec::VType vtype = vec::decodeVtype(raw_vtype);
+
+    if (!vec::isLegalVtype(raw_vtype) || vtype.vlmul != 0)
+    {
+        std::cerr << "Unsupported or illegal vector configuration\n";
+        return;
+    }
+
+    uint32_t sew_bits = vec::sewBits(vtype.vsew);
+
+    if (sew_bits == 0)
+    {
+        std::cerr << "Unsupported SEW\n";
+        return;
+    }
+
+    size_t sew_bytes = sew_bits / 8;
+    size_t elements_per_register = vconst::kVlenBytes / sew_bytes;
+
+    if (vl > elements_per_register)
+    {
+        std::cerr << "VL exceeds vector register capacity for LMUL=1\n";
+        return;
+    }
+
+    auto old_vd = registers_.ReadVreg(vd);
+
+    for (size_t i = 0; i < vl; i++)
+    {
+        uint64_t a = registers_.ReadVectorElement(vs2, sew_bytes, i);
+        uint64_t b = registers_.ReadVectorElement(vs1, sew_bytes, i);
+
+        uint64_t mask = (sew_bits == 64)
+                            ? UINT64_MAX
+                            : ((1ULL << sew_bits) - 1);
+
+        uint64_t result = (a + b) & mask;
+
+        registers_.WriteVectorElement(vd, sew_bytes, i, result);
+    }
+
+    auto new_vd = registers_.ReadVreg(vd);
+
+    if (old_vd != new_vd)
+    {
+        current_delta_.register_changes.push_back(
+            {vd, 3, 0, 0, old_vd, new_vd});
+    }
+}
 
 void RVSSProcessor::WriteBackFloat()
 {
@@ -1224,6 +1353,11 @@ void RVSSProcessor::Undo()
             registers_.WriteFpr(change.reg_index, change.old_value);
             break;
         }
+        case 3:
+{ // VECTOR
+    registers_.WriteVreg(change.reg_index, change.old_vector);
+    break;
+}
         default:
             std::cerr << "Invalid register type: " << change.reg_type << std::endl;
             break;
@@ -1296,6 +1430,11 @@ void RVSSProcessor::Redo()
             registers_.WriteFpr(change.reg_index, change.new_value);
             break;
         }
+        case 3:
+{ // VECTOR
+    registers_.WriteVreg(change.reg_index, change.new_vector);
+    break;
+}
         default:
             std::cerr << "Invalid register type: " << change.reg_type << std::endl;
             break;

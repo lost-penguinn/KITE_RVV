@@ -146,8 +146,17 @@ void ProfilerEditor::updateLineInstructionTypeSlot
     {
         int lineNumber = pair.first;
         instruction_set::InstructionType instrType = pair.second;
-        m_lineNumberToInstructionType[lineNumber] = 
-        instruction_set::instructionTypeNames[toIndex(instrType)];
+        const auto index = toIndex(instrType);
+
+if (index < instruction_set::instructionTypeNames.size())
+{
+    m_lineNumberToInstructionType[lineNumber] =
+        instruction_set::instructionTypeNames[index];
+}
+else
+{
+    m_lineNumberToInstructionType[lineNumber] = "Unknown";
+}
     }
     viewport()->update();
 }

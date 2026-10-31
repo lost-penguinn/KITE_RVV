@@ -375,7 +375,8 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fld", "fsd", "fmadd.d", "fmsub.d", "fnmsub.d", "fnmadd.d", "fadd.d", "fsub.d", "fmul.d",
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
-    "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x"
+    "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
+    "vadd.vv", "vsetvli",
 
 };
 
@@ -966,6 +967,8 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"fmv.d.x", {SyntaxType::O_FPR_C_GPR}}, // f[n][0:63] to x[m][0:63], 64-bit floating-point value
                                             // from an x (integer) register into an f
                                             // (floating-point) register without conversion
+    {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_I}},
 
 };
 
