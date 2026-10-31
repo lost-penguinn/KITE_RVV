@@ -180,7 +180,7 @@ void EditorTab::setErrorLinesFromFile(const std::filesystem::path &filePath)
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly))
     {
-        qWarning() << "Could not open error file:" << filePath.string();
+        qWarning() << "Could not open error file:" << QString::fromStdString(filePath.string());
         return;
     }
 

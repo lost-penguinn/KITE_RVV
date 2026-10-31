@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # This works for Harshit
 # set( CMAKE_PREFIX_PATH "D:/QT/6.9.2/mingw_64/lib/cmake")
 # set(MINGW_PATH "D:/Qt/Tools/mingw1310_64")
-find_package(Qt6 6.9.2 REQUIRED COMPONENTS Core Widgets Network Concurrent)
+find_package(Qt6 6.4.2 REQUIRED COMPONENTS Core Widgets Network Concurrent)
 
 # This works for Atharva
 # set(CMAKE_PREFIX_PATH "/home/atharv/Qt/6.10.0/gcc_64")
@@ -39,7 +39,6 @@ set_source_files_properties(${LUA_SRC_FILES}
 
 
 file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.cpp")
-file(GLOB_RECURSE TEST_FILES "${TEST_DIR}/*.cpp")
 file(GLOB_RECURSE UI_FILES "${SRC_DIR}/*.ui")
 file(GLOB_RECURSE HEADER_FILES
     "${SRC_DIR}/*.h")
