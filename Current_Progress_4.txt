@@ -1,0 +1,585 @@
+Kites RISC-V Vector Extension (RVV) Implementation
+
+Progress Checkpoint – Document 4
+
+Date: 1 November 2026
+
+1. Project Overview
+
+Implementing partial RISC-V Vector Extension (RVV) support in the Kites RISC-V simulator.
+
+The implementation covers:
+
+Vector register storage and access.
+
+Vector configuration through vsetvli.
+
+Vector arithmetic and logical operations.
+
+Vector memory loads and stores.
+
+Vector register and memory undo/redo support.
+
+Assembler parsing and machine-code generation for vector instructions.
+
+The implementation is incremental. Each instruction is added through the existing assembler, processor, register, and UI architecture.
+
+2. Current Vector Architecture
+
+Component
+
+Current implementation
+
+VLEN
+
+128 bits
+
+Vector registers
+
+32 (v0–v31)
+
+Register size
+
+16 bytes each
+
+Supported LMUL
+
+1
+
+Supported SEW
+
+Legal configurations supported by existing vector configuration logic
+
+Vector CSRs
+
+vl, vtype, vstart, vlenb
+
+Masking
+
+Unmasked execution only
+
+Tail handling
+
+Inactive tail elements preserved
+
+Undo/redo
+
+Vector registers and memory changes tracked
+
+This is partial RVV support, not a complete implementation of the RVV 1.0 specification.
+
+3. Implemented Instructions
+
+Configuration
+
+vsetvli
+
+Vector moves
+
+vmv.v.i
+
+vmv.v.x
+
+Arithmetic
+
+vadd.vv
+
+vsub.vv
+
+vmul.vv
+
+Logical
+
+vand.vv
+
+vor.vv
+
+vxor.vv
+
+Vector memory
+
+vle32.v
+
+vse32.v
+
+4. Important Files and Responsibilities
+
+File
+
+Responsibility
+
+src/common/instructions.h
+
+Instruction syntax enum
+
+src/common/instructions.cpp
+
+Valid instruction sets and syntax mappings
+
+src/assembler/parser.h
+
+Parser declarations
+
+src/assembler/parser.cpp
+
+Syntax dispatch
+
+src/assembler/parse_formats/vector_formats.cpp
+
+Vector instruction parsers
+
+src/assembler/code_generator.cpp
+
+Vector machine-code generation
+
+src/processor/registers.h
+
+Vector register interface
+
+src/processor/registers.cpp
+
+Vector register storage and element access
+
+src/processor/rvss/rvss_processor.h
+
+Processor declarations
+
+src/processor/rvss/rvss_processor.cpp
+
+Vector execution and memory handling
+
+src/processor/processor_base.h
+
+Undo/redo change structures
+
+5. Vector Register Infrastructure
+
+The register implementation includes:
+
+ReadVreg(...)
+WriteVreg(...)
+ReadVectorElement(...)
+WriteVectorElement(...)
+
+Each vector register stores 16 raw bytes.
+
+Vector memory and arithmetic operations use these interfaces rather than directly manipulating the register storage.
+
+Vector register modifications are tracked in the processor's current_delta_ for undo/redo.
+
+6. Assembler Infrastructure
+
+A new syntax type was introduced:
+
+O_VEC_C_LP_GPR_RP
+
+It represents instructions of the form:
+
+vle32.v v1, (a0)
+vse32.v v1, (a0)
+
+The parser:
+
+parse_O_VEC_C_LP_GPR_RP()
+
+extracts:
+
+Destination/source vector register.
+
+Base general-purpose register.
+
+The parser stores the vector register in rd and the base GPR in rs1.
+
+The syntax type is dispatched through parser.cpp, and the instructions are registered in instructions.cpp.
+
+7. Vector Memory Machine-Code Generation
+
+The following helper was added to code_generator.cpp:
+
+uint32_t generateVectorMemoryMachineCode(
+    const ICUnit &block,
+    bool is_store
+)
+{
+    const uint32_t vreg = VectorRegisterIndex(block.getRd());
+
+    const uint32_t rs1 =
+        static_cast<uint32_t>(
+            std::stoi(block.getRs1().substr(1))
+        );
+
+    if (rs1 > 31)
+        throw std::runtime_error(
+            "Invalid vector memory base register"
+        );
+
+    const uint32_t opcode = is_store ? 0x27u : 0x07u;
+
+    return (1u << 25)
+         | (rs1 << 15)
+         | (0b110u << 12)
+         | (vreg << 7)
+         | opcode;
+}
+
+The machine-code generator dispatches:
+
+else if (block.getOpcode() == "vle32.v")
+    code = generateVectorMemoryMachineCode(block, false);
+
+else if (block.getOpcode() == "vse32.v")
+    code = generateVectorMemoryMachineCode(block, true);
+
+Encoding characteristics
+
+Field
+
+Value
+
+Load opcode
+
+0x07
+
+Store opcode
+
+0x27
+
+nf
+
+0
+
+mew
+
+0
+
+mop
+
+00
+
+vm
+
+1
+
+width
+
+110 (32-bit)
+
+Addressing
+
+Unit-stride
+
+Masking
+
+Disabled
+
+This currently supports unmasked, unit-stride, single-field 32-bit vector memory operations.
+
+8. Vector Memory Execution
+
+A new processor method was introduced:
+
+void WriteVectorMemory();
+
+It is declared in:
+
+src/processor/rvss/rvss_processor.h
+
+Its implementation is in:
+
+src/processor/rvss/rvss_processor.cpp
+
+The method:
+
+Decodes the vector memory instruction.
+
+Determines whether the instruction is a load or store.
+
+Validates the supported addressing mode.
+
+Checks vector configuration.
+
+Reads vl and the base address.
+
+Performs memory transfers.
+
+Records changes for undo/redo.
+
+Supported configuration checks
+
+Currently requires:
+
+SEW = 32
+
+LMUL = 1
+
+vstart = 0
+
+vm = 1
+
+Unit-stride addressing.
+
+Single-field memory operation.
+
+Load implementation
+
+For each active element:
+
+const uint32_t value =
+    memory_controller_.readWord(base + i * 4);
+
+The four bytes are copied into the appropriate vector-register element.
+
+The original vector register is preserved for tail elements.
+
+The resulting vector register change is recorded in:
+
+current_delta_.register_changes
+
+Store implementation
+
+For each active element:
+
+Reads four bytes from the source vector register.
+
+Constructs a 32-bit value.
+
+Writes the value to memory using writeWord.
+
+Records old and new memory bytes.
+
+Memory changes are recorded in:
+
+current_delta_.memory_changes
+
+WriteMemory dispatch
+
+At the beginning of the existing WriteMemory() function:
+
+uint8_t opcode = current_instruction_ & 0b1111111;
+
+if (opcode == 0x07 || opcode == 0x27)
+{
+    WriteVectorMemory();
+    return;
+}
+
+The existing scalar memory implementation remains unchanged.
+
+9. Vector Memory Verification
+
+The following assembly program was used:
+
+main:
+    vsetvli t0, zero, 208
+
+    lui t0, 0x2
+    addi t1, t0, 0x100
+    addi t2, t0, 0x200
+
+    vle32.v v1, (t0)
+    vle32.v v2, (t1)
+
+    vadd.vv v3, v1, v2
+
+    vse32.v v3, (t2)
+
+end:
+    addi x0, x0, 0
+
+For a complete test, source memory was initialized using scalar stores:
+
+Address
+
+Value
+
+0x2000
+
+10
+
+0x2004
+
+20
+
+0x2008
+
+30
+
+0x200C
+
+40
+
+0x2100
+
+1
+
+0x2104
+
+2
+
+0x2108
+
+3
+
+0x210C
+
+4
+
+Expected results:
+
+Location
+
+Expected values
+
+v1
+
+10, 20, 30, 40
+
+v2
+
+1, 2, 3, 4
+
+v3
+
+11, 22, 33, 44
+
+0x2200 onward
+
+11, 22, 33, 44
+
+Actual verification
+
+The simulator terminal confirmed:
+
+[VectorMemory] LOAD vreg=v1 base=0x2000 vl=4 width=6 vm=1
+
+[VectorMemory] LOAD vreg=v2 base=0x2100 vl=4 width=6 vm=1
+
+[VectorMemory] STORE vreg=v3 base=0x2200 vl=4 width=6 vm=1
+
+The memory viewer displayed:
+
+Address  64-bit Double Word
+0x2200   0x160000000B
+0x2208   0x2C00000021
+
+Decoded into two little-endian 32-bit elements per double word:
+
+Address
+
+First 32-bit element
+
+Second 32-bit element
+
+0x2200
+
+11
+
+22
+
+0x2208
+
+33
+
+44
+
+This confirms that the load/store handler was reached and that the expected output was written to memory.
+
+Status: vle32.v and vse32.v successfully verified through the simulator.
+
+10. Build and Debugging Notes
+
+Build command:
+
+cmake --build build -j$(nproc)
+
+The project built successfully after the parser, encoding, and processor changes.
+
+The following execution flow was inspected:
+
+Fetch
+  ↓
+Decode
+  ↓
+Execute
+  ↓
+WriteMemory
+  ↓
+WriteBack
+
+Vector memory instructions use opcodes 0x07 and 0x27. Their funct3 is 110, so they are not confused with the existing floating-point load/store classifications (funct3 010 and 011).
+
+Temporary std::cerr diagnostics were added to verify handler execution. Remove these temporary diagnostics before continuing development.
+
+11. Current Limitations
+
+The current implementation does not yet support:
+
+Vector memory operations for 8-bit and 16-bit elements.
+
+Vector memory operations for 64-bit elements.
+
+Strided vector memory operations.
+
+Indexed vector memory operations.
+
+Masked vector memory operations.
+
+Segmented vector memory operations.
+
+LMUL values other than 1.
+
+Nonzero vstart execution and restart semantics.
+
+Full RVV 1.0 behavior.
+
+These limitations should be handled incrementally.
+
+12. Recommended Next Steps
+
+Immediate next task: additional element widths
+
+Implement:
+
+vle8.v
+vse8.v
+
+vle16.v
+vse16.v
+
+Recommended approach:
+
+Generalize the vector memory machine-code generator to accept an element width.
+
+Register the four new instructions in instructions.cpp.
+
+Reuse the existing parser syntax.
+
+Generalize WriteVectorMemory() to decode the width field.
+
+Use the appropriate memory read/write functions for each element size.
+
+Preserve inactive tail elements during loads.
+
+Maintain undo/redo tracking for both register and memory changes.
+
+Verify each width in the simulator.
+
+Once these work, consider adding 64-bit vector memory operations.
+
+Important development preference
+
+Continue working incrementally:
+
+Inspect existing code before modifying it.
+
+Make focused changes.
+
+Build after each logical implementation step.
+
+Let the user verify behavior in the simulator.
+
+Avoid introducing unnecessary test infrastructure.
+
+End of Checkpoint Document 4
+
+Current milestone: Basic vector arithmetic and 32-bit unit-stride vector memory operations are implemented and verified in Kites.

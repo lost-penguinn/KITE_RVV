@@ -1,0 +1,219 @@
+This checkpoint documents the current RISC-V Vector Extension (RVV) implementation in the Kites simulator, including today's arithmetic and bitwise instruction additions.
+1. Project environment
+- Repository: Kites
+- Working directory: ~/Kites
+- Language: C++
+- GUI: Qt
+- Architecture: RISC-V simulator (RV64)
+- Current work: RVV instruction support
+- Branch: Verify with git branch --show-current before continuing.
+2. Implemented vector architecture
+Component	Current implementation
+VLEN	128 bits
+Vector registers	32 (v0–v31)
+Register storage	16 bytes per vector register
+SEW	Supported legal configurations
+LMUL	1 only
+Masking	Not supported yet
+Tail handling	Inactive tail elements preserved
+Undo/redo	Vector register changes tracked
+
+Vector-related CSRs:
+- vl
+- vtype
+- vstart
+- vlenb
+The current implementation has vector state and configuration support, but not every CSR behavior or RVV feature is implemented.
+3. Implemented instructions
+7 instructions implemented
+Instruction	Description	Status
+vsetvli	Configure vector type and vector length	Passed
+vmv.v.i	Broadcast signed immediate	Passed
+vmv.v.x	Broadcast scalar GPR value	Passed
+vadd.vv	Vector addition	Passed
+vsub.vv	Vector subtraction	Passed
+vmul.vv	Vector multiplication	Passed
+vand.vv	Vector AND	Passed
+vor.vv	Vector OR	Passed
+vxor.vv	Vector XOR	Passed
+
+Correction: there are 9 implemented instructions, including configuration and move instructions.
+4. Important implementation details
+Vector configuration
+vsetvli supports:
+- AVL-based vector length selection.
+- Legal vtype validation.
+- vill handling.
+- Updates to vl, vtype, and destination GPR.
+- Undo tracking for CSR and GPR changes.
+Important configuration examples:
+Immediate	Configuration	VLMAX
+208	e32,m1	4
+192	e8,m1	16
+
+Vector instruction encoding
+All .vv instructions share:
+uint32_t generateVectorVVMachineCode(
+    const ICUnit &block, uint32_t funct6, uint32_t funct3)
+
+
+Operand mapping:
+Assembly operand	Encoded field
+First (vd)	vd
+Second (vs2)	vs2
+Third (vs1)	vs1
+
+The encoder sets vm=1 for unmasked execution.
+
+Current encoding table:
+Instruction	funct6	funct3
+vadd.vv	000000	000
+vsub.vv	000010	000
+vmul.vv	100101	010
+vand.vv	001001	000
+vor.vv	001010	000
+vxor.vv	001011	000
+
+Execution
+All supported vector operations use:
+void RVSSProcessor::ExecuteVector()
+
+
+The function:
+1. Decodes opcode, funct6, funct3, and register fields.
+2. Identifies the vector operation.
+3. Rejects unsupported masked instructions.
+4. Checks vtype legality.
+5. Checks LMUL=1.
+6. Reads source vector elements.
+7. Calculates each active lane.
+8. Writes the resulting bytes into the destination vector register.
+9. Records the old and new register values for undo/redo.
+Arithmetic results are truncated to the configured SEW width.
+
+For subtraction, the operation is:
+lhs - rhs
+
+
+where lhs = vs2[i] and rhs = vs1[i].
+5. Files modified
+File	Changes
+src/common/instructions.cpp	Added instruction recognition and syntax-map entries
+src/assembler/code_generator.cpp	Added shared .vv machine-code encoder and dispatch
+src/processor/rvss/rvss_processor.cpp	Extended ExecuteVector() with five new operations
+
+The existing parser syntax was reused:
+SyntaxType::O_VEC_C_VEC_C_VEC
+
+
+No additional parser syntax type was required.
+6. Verification performed
+All tests passed
+Build
+cmake --build build -j$(nproc)
+
+
+Build completed successfully.
+Arithmetic and bitwise tests
+Tested:
+vsetvli t0, zero, 208
+
+vmv.v.i v1, 7
+vmv.v.i v2, 2
+
+vadd.vv v3, v1, v2
+vsub.vv v4, v1, v2
+vmul.vv v5, v1, v2
+
+vmv.v.i v6, 6
+vmv.v.i v7, 3
+
+vand.vv v8, v6, v7
+vor.vv  v9, v6, v7
+vxor.vv v10, v6, v7
+
+
+Expected and observed results:
+Register	Result
+v3	9
+v4	5
+v5	14
+v8	2
+v9	7
+v10	5
+
+Overflow and underflow
+Tested e32 subtraction:
+vmv.v.i v1, 2
+vmv.v.i v2, 7
+vsub.vv v3, v1, v2
+
+
+Expected:
+0xFFFFFFFB
+
+
+Observed: correct.
+
+Multiplication was also tested and produced the expected result.
+Undo/redo
+Tested a complete program containing all five arithmetic and bitwise operations.
+- Undo restored previous vector register values.
+- Redo restored computed values.
+- No regression observed.
+Earlier verification retained
+The following earlier tests also passed:
+- vsetvli legal and illegal configurations.
+- vmv.v.i sign extension.
+- vmv.v.x scalar truncation to SEW.
+- vadd.vv operand ordering.
+- Tail preservation.
+- Illegal vtype rejection.
+- Undo/redo of configuration and move instructions.
+7. Current limitations
+The following features remain unimplemented:
+1. Vector loads and stores (vle*, vse*).
+2. Masked vector execution.
+3. LMUL values other than 1.
+4. Full vstart behavior.
+5. Named vtype syntax.
+6. Additional arithmetic operations such as division, remainder, shifts, and saturating arithmetic.
+7. Broader RVV 1.0 instruction coverage.
+The simulator should therefore be described as having partial RVV support, not complete RVV 1.0 compliance.
+8. Recommended next steps
+Suggested order for future development:
+Priority	Task
+1	Vector loads (vle8.v, vle16.v, vle32.v, vle64.v)
+2	Vector stores (vse8.v, vse16.v, vse32.v, vse64.v)
+3	Test memory undo/redo
+4	Masked execution
+5	Additional arithmetic and logical operations
+6	LMUL greater than 1
+7	vstart support
+
+Vector loads and stores are especially valuable next because they will allow different values in individual vector lanes, making more comprehensive arithmetic testing possible.
+
+9. Instructions for the next ChatGPT session
+Continue from this checkpoint.
+
+Important working preferences:
+- Inspect existing code before proposing modifications.
+- Work incrementally, one small change at a time.
+- Give exact terminal commands.
+- Wait for command output before proceeding.
+- Avoid replacing entire functions or files unnecessarily.
+- Preserve existing functionality, particularly undo/redo and GUI register updates.
+- Build after meaningful implementation changes.
+- Verify instructions in the actual Kites GUI, not just through compilation.
+First action in the next session:
+
+Inspect the current Git state:
+cd ~/Kites
+git status
+git branch --show-current
+git log -5 --oneline
+
+
+Then begin planning vector loads and stores based on the actual existing memory execution pipeline.
+
+Checkpoint complete. This is the current implementation baseline as of 1 November 2026.

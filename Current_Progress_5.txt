@@ -1,0 +1,685 @@
+# Kites RVV Implementation — Detailed Technical Development Log
+
+**Date:** November 2, 2026  
+**Project:** Kites RISC-V Simulator  
+**Component:** RISC-V Vector Extension (RVV)  
+**Focus:** Vector-scalar operations, reduction instructions, and processor execution implementation.
+
+---
+
+# 1. Existing RVV Architecture
+
+Before today's additions, the simulator already had a basic vector execution framework.
+
+The implementation uses:
+
+- VLEN = 128 bits (16 bytes).
+- ELEN = 64 bits.
+- 32 vector registers (`v0–v31`).
+- LMUL = 1 for the currently supported configuration.
+- A vector register represented as a fixed-size byte array.
+- CSR-based vector configuration.
+
+Important files:
+
+| File | Responsibility |
+|---|---|
+| `src/common/vector_defs.h` | Vector constants, VType decoding, SEW and VLMAX helpers |
+| `src/processor/registers.h` | Vector register interface |
+| `src/processor/registers.cpp` | Vector register storage and element access |
+| `src/processor/rvss/rvss_processor.cpp` | Instruction decoding and execution |
+| `src/common/instructions.cpp` | Instruction registration and parser syntax |
+| `src/assembler/code_generator.cpp` | Machine-code generation |
+
+## 1.1 Vector register access
+
+The processor uses the existing vector register interface:
+
+```cpp
+registers_.ReadVreg(vd);
+registers_.WriteVreg(vd, new_vd);
+
+registers_.ReadVectorElement(reg, sew_bytes, index);
+registers_.WriteVectorElement(reg, sew_bytes, index, value);
+```
+
+This abstraction allows the execution engine to work with vector elements without manually calculating byte offsets in every instruction.
+
+The underlying register representation remains byte-oriented, while the execution logic operates on decoded element values.
+
+## 1.2 Vector configuration
+
+The execution engine obtains the current vector configuration from the CSRs:
+
+```cpp
+const uint64_t raw_vtype =
+    registers_.ReadCsr(vconst::kCsrVtype);
+
+const vec::VType vtype =
+    vec::decodeVtype(raw_vtype);
+
+const size_t sew_bytes =
+    vec::sewBits(vtype.vsew) / 8;
+
+const uint64_t vl =
+    std::min<uint64_t>(
+        registers_.ReadCsr(vconst::kCsrVl),
+        vec::vlmax(raw_vtype)
+    );
+```
+
+This allows the same execution code to use the currently configured element width and active vector length.
+
+# 2. Core Processor Execution Architecture
+
+Today's instructions were integrated into the existing `RVSSProcessor::ExecuteVector()` function.
+
+Rather than implementing an entirely separate execution function for every instruction, we extended the existing operation-based execution architecture.
+
+## 2.1 Instruction field extraction
+
+The instruction decoder extracts the relevant fields:
+
+```cpp
+const uint8_t vd =
+    (inst >> 7) & 0x1F;
+
+const uint8_t funct3 =
+    (inst >> 12) & 0x7;
+
+const uint8_t vs1 =
+    (inst >> 15) & 0x1F;
+
+const uint8_t vs2 =
+    (inst >> 20) & 0x1F;
+
+const uint8_t vm =
+    (inst >> 25) & 0x1;
+
+const uint8_t funct6 =
+    (inst >> 26) & 0x3F;
+```
+
+These fields are used to identify the instruction and its operands.
+
+## 2.2 Internal operation enum
+
+The execution engine uses an internal `Op` enum to represent decoded vector operations.
+
+We extended it with the new vector-scalar logical and reduction operations.
+
+Representative additions:
+
+```cpp
+VredminVS,
+VredmaxVS,
+VredminuVS,
+VredmaxuVS,
+
+VandVX,
+VorVX,
+VxorVX,
+```
+
+The decoded operation is stored in:
+
+```cpp
+} op = Op::Unsupported;
+```
+
+This allows instruction decoding and instruction execution to remain separate stages.
+
+## 2.3 Decoder extension
+
+The decoder selects an operation using the opcode, `funct3`, and `funct6` fields.
+
+For vector-scalar operations:
+
+```cpp
+else if (opcode == 0x57 && funct3 == 0b100)
+{
+    if (funct6 == 0b000000)
+        op = Op::VaddVX;
+    else if (funct6 == 0b000010)
+        op = Op::VsubVX;
+    else if (funct6 == 0b000011)
+        op = Op::VrsubVX;
+    else if (funct6 == 0b100101)
+        op = Op::VmulVX;
+    else if (funct6 == 0b001001)
+        op = Op::VandVX;
+    else if (funct6 == 0b001010)
+        op = Op::VorVX;
+    else if (funct6 == 0b001011)
+        op = Op::VxorVX;
+}
+```
+
+The `vmv.v.x` special encoding must be checked before the general vector-scalar decoding conditions because it shares `funct3 = 100`.
+
+This ordering was important in debugging today's implementation.
+
+# 3. Vector-Scalar Arithmetic Implementation
+
+The vector-scalar operations use:
+
+- `vs2` as the vector source.
+- `vs1` as the scalar GPR index.
+- `vd` as the destination vector register.
+
+## 3.1 Reading the scalar operand
+
+The scalar value is retrieved from the general-purpose register file:
+
+```cpp
+const uint64_t scalar =
+    registers_.ReadGpr(vs1);
+```
+
+The vector element is retrieved separately:
+
+```cpp
+const uint64_t lhs =
+    registers_.ReadVectorElement(
+        vs2, sew_bytes, i
+    );
+```
+
+## 3.2 Arithmetic execution
+
+The scalar and vector values are combined according to the decoded operation:
+
+```cpp
+switch (op)
+{
+    case Op::VaddVX:
+        value = lhs + scalar;
+        break;
+
+    case Op::VsubVX:
+        value = lhs - scalar;
+        break;
+
+    case Op::VrsubVX:
+        value = scalar - lhs;
+        break;
+
+    case Op::VmulVX:
+        value = lhs * scalar;
+        break;
+
+    default:
+        break;
+}
+```
+
+The important distinction is the operand order of `vrsub.vx`.
+
+Unlike `vsub.vx`, it computes scalar minus vector element.
+
+## 3.3 Element-wise execution
+
+All vector-scalar instructions execute through the active-element loop:
+
+```cpp
+for (uint64_t i = 0; i < vl; ++i)
+{
+    // Read vector element.
+    // Perform operation.
+    // Write result into destination element.
+}
+```
+
+The result is written into `new_vd`:
+
+```cpp
+for (size_t k = 0; k < sew_bytes; ++k)
+{
+    new_vd[i * sew_bytes + k] =
+        static_cast<uint8_t>(
+            (value >> (8 * k)) & 0xFF
+        );
+}
+```
+
+This writes the result in little-endian byte order.
+
+Only active elements are updated, preserving the existing destination values beyond `vl` under the current implementation's tail-preservation behavior.
+
+# 4. Vector-Scalar Logical Implementation
+
+The logical instructions were integrated into the same execution path as vector-scalar arithmetic.
+
+The operation switch was extended with:
+
+```cpp
+case Op::VandVX:
+    value = lhs & scalar;
+    break;
+
+case Op::VorVX:
+    value = lhs | scalar;
+    break;
+
+case Op::VxorVX:
+    value = lhs ^ scalar;
+    break;
+```
+
+This avoids creating separate execution loops for logical operations.
+
+The same operand retrieval, SEW handling, destination update, and undo tracking mechanisms are reused.
+
+# 5. Vector Reduction Implementation
+
+One of the main additions today was extending the existing reduction execution engine.
+
+The reduction instructions operate differently from ordinary element-wise vector instructions.
+
+Instead of producing a result for every active element, a reduction combines all active elements into a single result.
+
+## 5.1 Reduction instruction operands
+
+For an instruction such as:
+
+```asm
+vredmin.vs v3, v1, v2
+```
+
+The operands are:
+
+- `vd = v3`: destination vector register.
+- `vs2 = v1`: source vector.
+- `vs1 = v2`: accumulator vector.
+
+The initial accumulator is taken from element zero of `vs1`.
+
+## 5.2 Reduction execution structure
+
+The implementation reads the initial accumulator:
+
+```cpp
+uint64_t value =
+    registers_.ReadVectorElement(vs1, sew_bytes, 0);
+```
+
+Then iterates through the active source elements:
+
+```cpp
+for (uint64_t i = 0; i < vl; ++i)
+{
+    const uint64_t element =
+        registers_.ReadVectorElement(
+            vs2, sew_bytes, i
+        );
+
+    // Apply reduction operation.
+}
+```
+
+This preserves the same reduction structure for all eight supported reduction instructions.
+
+## 5.3 Existing sum and logical reductions
+
+The existing switch already supported:
+
+```cpp
+case Op::VredsumVS:
+    value += element;
+    break;
+
+case Op::VredandVS:
+    value &= element;
+    break;
+
+case Op::VredorVS:
+    value |= element;
+    break;
+
+case Op::VredxorVS:
+    value ^= element;
+    break;
+```
+
+Today's work extended this switch with min/max operations.
+
+## 5.4 Signed minimum and maximum
+
+Signed reductions require interpreting the element according to the configured SEW.
+
+For example, under e32:
+
+```text
+0xFFFFFFFE = -2
+0x80000000 = -2147483648
+```
+
+These values must be interpreted as signed 32-bit integers, not positive 64-bit integers.
+
+The implementation performs SEW-aware sign extension:
+
+```cpp
+const unsigned sew_bits = sew_bytes * 8;
+
+const uint64_t sign_bit =
+    uint64_t{1} << (sew_bits - 1);
+
+const int64_t signed_value =
+    static_cast<int64_t>(
+        (value ^ sign_bit) - sign_bit
+    );
+
+const int64_t signed_element =
+    static_cast<int64_t>(
+        (element ^ sign_bit) - sign_bit
+    );
+```
+
+The selected operation then compares the signed representations:
+
+```cpp
+if (op == Op::VredminVS &&
+    signed_value > signed_element)
+{
+    value = element;
+}
+
+if (op == Op::VredmaxVS &&
+    signed_value < signed_element)
+{
+    value = element;
+}
+```
+
+The original bit pattern is retained in `value`, ensuring the result is written back using the correct SEW representation.
+
+## 5.5 Unsigned minimum and maximum
+
+Unsigned operations use standard unsigned comparisons:
+
+```cpp
+case Op::VredminuVS:
+    value = std::min(value, element);
+    break;
+
+case Op::VredmaxuVS:
+    value = std::max(value, element);
+    break;
+```
+
+The distinction between signed and unsigned comparison is important when the highest bit of an element is set.
+
+## 5.6 Reduction destination write
+
+After the loop, only element zero of the destination register is updated:
+
+```cpp
+for (size_t k = 0; k < sew_bytes; ++k)
+{
+    new_vd[k] =
+        static_cast<uint8_t>(
+            (value >> (8 * k)) & 0xFF
+        );
+}
+```
+
+The remaining destination elements are preserved.
+
+# 6. Assembler and Machine-Code Generation
+
+The processor changes required corresponding assembler support.
+
+## 6.1 Instruction registration
+
+File:
+
+`src/common/instructions.cpp`
+
+Added the new min/max reduction mnemonics to `valid_instructions`.
+
+Also registered their syntax using:
+
+```cpp
+SyntaxType::O_VEC_C_VEC_C_VEC
+```
+
+This allows the parser to recognize the three vector-register operands.
+
+## 6.2 Machine-code generator
+
+File:
+
+`src/assembler/code_generator.cpp`
+
+Reused the existing helper:
+
+```cpp
+generateVectorVVMachineCode(block, funct6, funct3);
+```
+
+This helper encodes:
+
+- Destination register.
+- First source vector register.
+- Second source vector register.
+- Function fields.
+- Unmasked execution bit.
+
+Added instruction dispatch for the four new reduction mnemonics:
+
+```cpp
+else if (block.getOpcode() == "vredminu.vs")
+    code = generateVectorVVMachineCode(
+        block, 0b000100, 0b010
+    );
+
+else if (block.getOpcode() == "vredmin.vs")
+    code = generateVectorVVMachineCode(
+        block, 0b000101, 0b010
+    );
+
+else if (block.getOpcode() == "vredmaxu.vs")
+    code = generateVectorVVMachineCode(
+        block, 0b000110, 0b010
+    );
+
+else if (block.getOpcode() == "vredmax.vs")
+    code = generateVectorVVMachineCode(
+        block, 0b000111, 0b010
+    );
+```
+
+# 7. Processor State and Undo Tracking
+
+The implementation continues to use the existing vector register state-management infrastructure.
+
+At the end of `ExecuteVector()`, the implementation compares the old and new destination register contents:
+
+```cpp
+if (old_vd != new_vd)
+{
+    registers_.WriteVreg(vd, new_vd);
+
+    current_delta_.register_changes.push_back(
+        {vd, 3, 0, 0, old_vd, new_vd}
+    );
+}
+```
+
+This ensures:
+
+- A vector register is written only when its contents change.
+- The processor records the old and new vector register states.
+- The existing register-change mechanism can track vector register updates for undo functionality.
+
+The implementation reuses the existing register change type for vector registers (`reg_type = 3`).
+
+# 8. Debugging: vmv.v.x Decoder Conflict
+
+During today's reduction test, the accumulator unexpectedly contained zero.
+
+The scalar GPR was checked independently by storing `t2` into memory.
+
+It contained:
+
+```text
+0x7FFFFFFF
+```
+
+However, storing the vector register after `vmv.v.x` showed zero.
+
+The issue was traced to instruction decoder ordering.
+
+The general vector-scalar decoder used:
+
+```cpp
+opcode == 0x57 && funct3 == 0b100
+```
+
+But `vmv.v.x` also uses `funct3 = 100`.
+
+The general decoder was catching the instruction before the special `VmvVX` decoder.
+
+## Fix
+
+Added the special check before the other vector-scalar operations:
+
+```cpp
+if (funct6 == 0b010111 && vs2 == 0)
+    op = Op::VmvVX;
+else if (funct6 == 0b000000)
+    op = Op::VaddVX;
+```
+
+After rebuilding, `vmv.v.x` correctly populated the vector register.
+
+This debugging step was essential because reduction operations depend on the initial accumulator being correctly initialized.
+
+# 9. Complete Test and Verification
+
+## 9.1 Build
+
+Successfully rebuilt using:
+
+```bash
+cmake --build build -j$(nproc)
+```
+
+## 9.2 Test data
+
+Configured the vector engine for e32,m1:
+
+```asm
+vsetvli t0, zero, 208
+```
+
+Source vector:
+
+```text
+v1 = [
+    0xFFFFFFFE,
+    0x00000005,
+    0x0000000A,
+    0x80000000
+]
+```
+
+Accumulator:
+
+```text
+v2[0] = 0x7FFFFFFF
+```
+
+## 9.3 Reduction instructions tested
+
+```asm
+vredmin.vs  v3, v1, v2
+vredmax.vs  v4, v1, v2
+vredminu.vs v5, v1, v2
+vredmaxu.vs v6, v1, v2
+```
+
+## 9.4 Results
+
+| Memory address | Instruction | Expected | Observed |
+|---|---|---|---|
+| `0x2200` | `vredmin.vs` | `0x80000000` | `0x80000000` |
+| `0x2210` | `vredmax.vs` | `0x7FFFFFFF` | `0x7FFFFFFF` |
+| `0x2220` | `vredminu.vs` | `0x00000005` | `0x00000005` |
+| `0x2230` | `vredmaxu.vs` | `0xFFFFFFFE` | `0xFFFFFFFE` |
+| `0x2240` | Accumulator verification | `0x7FFFFFFF` | `0x7FFFFFFF` |
+
+All five checks passed.
+
+# 10. Files Modified Today
+
+| File | Core changes |
+|---|---|
+| `src/common/instructions.cpp` | Instruction registration and reduction syntax mappings |
+| `src/assembler/code_generator.cpp` | Machine-code generation dispatch for min/max reductions |
+| `src/processor/rvss/rvss_processor.cpp` | Operation enum, instruction decoding, vector-scalar execution, reduction execution, SEW-aware signed comparisons, `vmv.v.x` decoder correction |
+
+# 11. Current Verified Instruction Inventory
+
+### Configuration
+- `vsetvli`
+
+### Vector moves
+- `vmv.v.i`
+- `vmv.v.x`
+
+### Vector-vector arithmetic
+- `vadd.vv`
+- `vsub.vv`
+- `vmul.vv`
+
+### Vector-vector logical
+- `vand.vv`
+- `vor.vv`
+- `vxor.vv`
+
+### Vector-scalar arithmetic
+- `vadd.vx`
+- `vsub.vx`
+- `vrsub.vx`
+- `vmul.vx`
+
+### Vector-scalar logical
+- `vand.vx`
+- `vor.vx`
+- `vxor.vx`
+
+### Vector memory
+- `vle32.v`
+- `vse32.v`
+
+### Vector reductions
+- `vredsum.vs`
+- `vredand.vs`
+- `vredor.vs`
+- `vredxor.vs`
+- `vredmin.vs`
+- `vredmax.vs`
+- `vredminu.vs`
+- `vredmaxu.vs`
+
+# 12. Remaining Implementation Work
+
+1. Additional vector load/store widths: 8, 16, and 64 bits.
+2. Vector comparison and mask-producing instructions.
+3. Masked vector execution.
+4. Larger LMUL configurations.
+5. More complete `vstart` support.
+6. Additional vector instruction families.
+7. Broader regression testing across SEW configurations.
+8. Verify undo/redo behavior for all new operations.
+
+---
+
+**Checkpoint: November 2, 2026**
+
+The Kites RVV execution engine now supports additional vector-scalar arithmetic and logical instructions and all eight implemented reduction operations.
+
+The implementation reuses the existing vector register abstraction, instruction decoding framework, machine-code generation helper, destination writeback mechanism, and register-change tracking system.
+
+All four newly implemented min/max reductions passed the e32,m1 simulator test.

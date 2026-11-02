@@ -481,6 +481,31 @@ void Parser::parseTextDirective()
                     valid_syntax = parse_O_FPR_C_I_LP_GPR_RP();
                     break;
                 }
+                case instruction_set::SyntaxType::O_VEC_C_VEC_C_VEC:
+{
+    valid_syntax = parse_O_VEC_C_VEC_C_VEC();
+    break;
+}   
+    case instruction_set::SyntaxType::O_VEC_C_I:
+{
+    valid_syntax = parse_O_VEC_C_I();
+    break;
+}
+case instruction_set::SyntaxType::O_VEC_C_GPR:
+{
+    valid_syntax = parse_O_VEC_C_GPR();
+    break;
+}
+case instruction_set::SyntaxType::O_VEC_C_LP_GPR_RP:
+{
+    valid_syntax = parse_O_VEC_C_LP_GPR_RP();
+    break;
+}
+case instruction_set::SyntaxType::O_VEC_C_VEC_C_GPR:
+{
+    valid_syntax = parse_O_VEC_C_VEC_C_GPR();
+    break;
+}
 
                 default:
                 {

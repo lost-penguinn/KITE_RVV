@@ -64,7 +64,11 @@ void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &pro
         {
             instr::InstructionType instrType = instr::getInstructionType(mnemonic);
             m_lineNumberToinstructionType[lineNumber] = instrType;
-            m_instructionTypeCounts[toIndex(instrType)]++;
+           if (instrType != instr::InstructionType::UNKNOWN &&
+    toIndex(instrType) < m_instructionTypeCounts.size())
+{
+    m_instructionTypeCounts[toIndex(instrType)]++;
+}
         }
     }
     emit updateLineInstructionTypeSignal(m_lineNumberToinstructionType);

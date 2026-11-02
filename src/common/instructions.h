@@ -446,6 +446,11 @@ enum class SyntaxType
                          ///< floating-point-register
     O_FPR_C_I_LP_GPR_RP, ///< Opcode floating-point-register , immediate , lparen ( general-register
                          ///< ) rparen
+    O_VEC_C_VEC_C_VEC,
+    O_VEC_C_I,     ///< vector-register , immediate
+    O_VEC_C_GPR,   ///< vector-register , general-register
+    O_VEC_C_LP_GPR_RP,  ///< vector-register , lparen ( general-register ) rparen
+    O_VEC_C_VEC_C_GPR,
 };
 
 extern std::unordered_map<std::string, RTypeInstructionEncoding> R_type_instruction_encoding_map;

@@ -1,0 +1,617 @@
+# Kites — RISC-V Vector Extension Implementation Log
+
+**Date:** 31 October 2026  
+**Project:** Kites RISC-V Simulator  
+**Feature:** Initial RVV (RISC-V Vector Extension) support
+
+## 1. Objective
+
+Extend Kites to support an initial subset of RISC-V Vector Extension instructions.
+
+The first implementation targets:
+
+- 32 vector registers (`v0`–`v31`)
+- 128-bit vector register width (VLEN = 128)
+- Vector configuration through `vsetvli`
+- Vector addition through `vadd.vv`
+- Vector register visibility in the GUI
+- Undo/redo support for vector register changes
+
+The implementation currently supports a restricted subset of RVV rather than the complete specification.
+
+---
+
+## 2. Vector register architecture
+
+### File: `src/processor/registers.h`
+
+Added vector configuration constants:
+
+```cpp
+namespace vconst
+{
+    constexpr size_t kVlenBits = 128;
+    constexpr size_t kVlenBytes = kVlenBits / 8;
+    constexpr size_t kNumVectorRegs = 32;
+    constexpr size_t kElenBits = 64;
+
+    constexpr size_t kCsrVstart = 0x008;
+    constexpr size_t kCsrVl = 0xC20;
+    constexpr size_t kCsrVtype = 0xC21;
+    constexpr size_t kCsrVlenb = 0xC22;
+
+    constexpr uint64_t kVtypeVill = 1ULL << 63;
+}
+```
+
+Added vector register storage to `RegisterFile`:
+
+```cpp
+std::array<std::array<uint8_t, vconst::kVlenBytes>,
+           vconst::kNumVectorRegs> vpr_ = {};
+```
+
+Each vector register contains 16 bytes (128 bits).
+
+Added methods:
+
+```cpp
+std::array<uint8_t, vconst::kVlenBytes>
+ReadVreg(size_t reg) const;
+
+void WriteVreg(
+    size_t reg,
+    const std::array<uint8_t, vconst::kVlenBytes>& bytes
+);
+
+uint64_t ReadVectorElement(
+    size_t base_reg,
+    size_t sew_bytes,
+    size_t index
+) const;
+
+void WriteVectorElement(
+    size_t base_reg,
+    size_t sew_bytes,
+    size_t index,
+    uint64_t value
+);
+```
+
+Added the signal:
+
+```cpp
+void updateVRegister(size_t regIndex);
+```
+
+`WriteVreg()` emits this signal after updating a vector register.
+
+### Reset behavior
+
+`RegisterFile::Reset()` initializes:
+
+- All vector registers to zero.
+- `vl` to zero.
+- `vtype` to `vill`.
+- `vlenb` to 16.
+
+---
+
+## 3. Vector configuration definitions
+
+### File: `src/common/vector_defs.h`
+
+Created a header-only helper implementation in namespace `Kites::vec`.
+
+It contains:
+
+- `VType` structure containing `vlmul`, `vsew`, `vta`, and `vma`.
+- `decodeVtype()` to decode a raw VTYPE value.
+- `encodeVtype()` to encode a VTYPE structure.
+- `sewBits()` to convert SEW encoding into 8, 16, 32, or 64 bits.
+- `lmulFraction()` for LMUL interpretation.
+- `isLegalVtype()` to validate a VTYPE configuration.
+- `vlmax()` to calculate the maximum vector length.
+- `parseVtypeTokens()` for VTYPE token parsing.
+
+The current execution implementation primarily supports LMUL=1.
+
+---
+
+## 4. Assembler changes
+
+### Files:
+- `src/common/instructions.h`
+- `src/common/instructions.cpp`
+- `src/assembler/parser.h`
+- `src/assembler/parse_formats/vector_formats.cpp`
+- `src/assembler/parse_formats/i_m_formats.cpp`
+- `src/assembler/code_generator.cpp`
+
+### 4.1 Added vector operand syntax
+
+Added:
+
+```cpp
+SyntaxType::O_VEC_C_VEC_C_VEC
+```
+
+Added the syntax map entry:
+
+```cpp
+{"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+```
+
+Added the parser declaration:
+
+```cpp
+bool parse_O_VEC_C_VEC_C_VEC();
+```
+
+Created `vector_formats.cpp` to parse three vector register operands.
+
+The parser:
+
+1. Reads the destination vector register.
+2. Reads the first source vector register.
+3. Reads the second source vector register.
+4. Validates commas and line boundaries.
+5. Stores the operands in an `ICUnit`.
+6. Adds the instruction to intermediate code.
+
+### 4.2 Added instruction validation
+
+Added `vadd.vv` and `vsetvli` to the valid instruction set.
+
+### 4.3 Added `vsetvli` syntax
+
+Added:
+
+```cpp
+{"vsetvli", {SyntaxType::O_GPR_C_GPR_C_I}},
+```
+
+The generic immediate parser originally populated operands only for recognized I-type instructions.
+
+Since `vsetvli` was not classified as an I-type instruction, its operands were left empty.
+
+Fixed the condition in `i_m_formats.cpp`:
+
+```cpp
+if (instruction_set::isValidITypeInstruction(block.getOpcode()) ||
+    block.getOpcode() == "vsetvli")
+```
+
+This allows the parser to populate the destination register, source register, and immediate.
+
+### 4.4 Added `vadd.vv` machine-code generation
+
+Added:
+
+```cpp
+uint32_t generateVAddVvMachineCode(const ICUnit &block)      // was int32_t
+{
+    const uint32_t vd  = VectorRegisterIndex(block.getRd());
+    const uint32_t vs2 = VectorRegisterIndex(block.getRs1());  // 2nd text operand
+    const uint32_t vs1 = VectorRegisterIndex(block.getRs2());  // 3rd text operand
+    return (1u << 25) | (vs2 << 20) | (vs1 << 15) | (0b000u << 12) | (vd << 7) | 0b1010111u;
+}
+```
+
+This generates an unmasked vector-vector addition instruction.
+
+### 4.5 Added `vsetvli` machine-code generation
+
+Added:
+
+```cpp
+uint32_t generateVSetVliMachineCode(const ICUnit &block)
+{
+    const uint32_t rd =
+        static_cast<uint32_t>(std::stoi(block.getRd().substr(1)));
+
+    const uint32_t rs1 =
+        static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
+
+    const uint32_t zimm =
+        static_cast<uint32_t>(std::stoul(block.getImm(), nullptr, 0));
+
+    if (rd > 31 || rs1 > 31 || zimm > 0x7FF)
+        throw std::runtime_error("Invalid vsetvli operands");
+
+    if (!vec::isLegalVtype(zimm))
+        throw std::runtime_error("Illegal vtype immediate");
+
+    return (zimm << 20)
+         | (rs1 << 15)
+         | (0b111 << 12)
+         | (rd << 7)
+         | 0b1010111;
+}
+```
+
+The register names are already canonicalized by the parser, so the implementation extracts the register number directly.
+
+Added dispatch in `generateMachineCode()`:
+
+```cpp
+if (block.getOpcode() == "vsetvli")
+    code = generateVSetVliMachineCode(block);
+else if (block.getOpcode() == "vadd.vv")
+    code = generateVAddVvMachineCode(block);
+```
+
+### 4.6 Current assembler syntax
+
+The current `vsetvli` implementation accepts a numeric immediate for `zimm`.
+
+Example:
+
+```asm
+vsetvli t0, zero, 192
+```
+
+Here, `192` (`0x0C0`) represents `e32,m1`.
+
+Named VTYPE syntax is not yet implemented.
+
+---
+
+## 5. Processor execution changes
+
+### Files:
+- `src/processor/rvss/rvss_processor.h`
+- `src/processor/rvss/rvss_processor.cpp`
+
+Added declarations:
+
+```cpp
+void ExecuteVector();
+void ExecuteVsetvli();
+```
+
+Included:
+
+```cpp
+#include "common/vector_defs.h"
+```
+
+### 5.1 Vector instruction dispatch
+
+Added handling for opcode `0b1010111` in `RVSSProcessor::Execute()`.
+
+The `funct3` field determines whether the instruction is treated as `vsetvli` or a vector arithmetic instruction.
+
+```cpp
+else if (opcode == 0b1010111)
+{
+    uint8_t funct3 = (current_instruction_ >> 12) & 0x7;
+
+    if (funct3 == 0b111)
+        ExecuteVsetvli();
+    else
+        ExecuteVector();
+
+    return;
+}
+```
+
+### 5.2 Implemented `vadd.vv`
+
+The current implementation:
+
+1. Decodes `vd`, `vs1`, and `vs2`.
+2. Checks the opcode and function fields.
+3. Rejects masked execution.
+4. Reads `vl` and `vtype`.
+5. Validates the vector configuration.
+6. Determines SEW and the number of elements per register.
+7. Adds corresponding elements from the two source registers.
+8. Writes the results into the destination register.
+9. Records vector changes for undo/redo.
+
+Supported configurations:
+
+| Property | Current support |
+|---|---|
+| Instruction | `vadd.vv` |
+| Masking | Unmasked only |
+| SEW | 8, 16, 32, 64 bits |
+| LMUL | 1 only |
+| VLEN | 128 bits |
+| Tail handling | Existing destination elements preserved |
+
+The arithmetic result is masked to the selected SEW width.
+
+### 5.3 Implemented `vsetvli`
+
+The implementation:
+
+1. Extracts `rd`, `rs1`, and the 11-bit `zimm`.
+2. Validates the VTYPE immediate.
+3. Calculates AVL.
+4. Calculates VLMAX.
+5. Updates `vtype` and `vl`.
+6. Writes the resulting VL into `rd`, unless `rd=x0`.
+7. Records changes for undo/redo.
+
+The current implementation handles the simplified `rs1=x0` case used in our test. The complete AVL special-case semantics still need to be implemented.
+
+---
+
+## 6. Undo and redo support
+
+### File: `src/processor/processor_base.h`
+
+Extended `RegisterChange` to support vector registers:
+
+```cpp
+struct RegisterChange
+{
+    unsigned int reg_index;
+    unsigned int reg_type;
+
+    uint64_t old_value;
+    uint64_t new_value;
+
+    std::array<uint8_t, 16> old_vector{};
+    std::array<uint8_t, 16> new_vector{};
+};
+```
+
+Register types:
+
+- `0`: GPR
+- `1`: CSR
+- `2`: FPR
+- `3`: Vector register
+
+Added vector handling to `Undo()`:
+
+```cpp
+case 3:
+{
+    registers_.WriteVreg(change.reg_index, change.old_vector);
+    break;
+}
+```
+
+Added corresponding handling to `Redo()`:
+
+```cpp
+case 3:
+{
+    registers_.WriteVreg(change.reg_index, change.new_vector);
+    break;
+}
+```
+
+The processor records the old and new vector register contents when a vector instruction changes its destination.
+
+Compilation of the undo/redo changes was confirmed.
+
+---
+
+## 7. GUI changes — displaying vector registers
+
+### Files:
+- `src/ui/register_table/registermodel.h`
+- `src/ui/register_table/registermodel.cpp`
+- `src/ui/register_table/registercontainer.cpp`
+
+### 7.1 Extended the register model
+
+Changed:
+
+```cpp
+return 64;
+```
+
+to:
+
+```cpp
+return 96;
+```
+
+The model now exposes:
+
+| Row range | Registers |
+|---|---|
+| 0–31 | x0–x31 |
+| 32–63 | f0–f31 |
+| 64–95 | v0–v31 |
+
+### 7.2 Added vector register names
+
+Updated column 0 in `RegisterModel::data()`:
+
+```cpp
+case 0: // Register Name
+    if (row < 32)
+        return QString("x%1").arg(row);
+    else if (row < 64)
+        return QString("f%1").arg(row - 32);
+    else
+        return QString("v%1").arg(row - 64);
+```
+
+Vector registers have no aliases in the current table, so column 1 returns an empty string for them.
+
+### 7.3 Added vector register values
+
+For rows 64–95, the model reads the vector register:
+
+```cpp
+auto bytes = m_currentRegisterFile->ReadVreg(row - 64);
+```
+
+It displays all 16 bytes in reverse byte order, producing a 128-bit hexadecimal representation:
+
+```cpp
+QString value = "0x";
+
+for (int i = static_cast<int>(bytes.size()) - 1; i >= 0; --i)
+{
+    value += QString("%1")
+                 .arg(bytes[i], 2, 16, QChar('0'))
+                 .toUpper();
+}
+
+return value;
+```
+
+This makes each vector register appear as a 32-digit hexadecimal value.
+
+### 7.4 Added vector update notifications
+
+Declared a new slot in `registermodel.h`:
+
+```cpp
+void updateVRegisterValue(size_t regIndex);
+```
+
+Implemented it in `registermodel.cpp`:
+
+```cpp
+void RegisterModel::updateVRegisterValue(size_t regIndex)
+{
+    m_highlightedRegisterIndex = regIndex + 64;
+    beginResetModel();
+    endResetModel();
+}
+```
+
+Connected the `RegisterFile::updateVRegister` signal to this slot.
+
+### 7.5 Added a Vector Registers GUI section
+
+The important discovery was that the GUI uses `RegisterRangeProxyModel` inside `RegisterContainer`.
+
+Even though the underlying model exposed 96 rows, the GUI only displayed rows 0–63 because it defined two sections.
+
+Changed the section array in `registercontainer.cpp` from two sections to three:
+
+```cpp
+const std::array<SectionSpec, 3> sections = {
+    SectionSpec{"General Purpose", 0, 32},
+    SectionSpec{"Floating Point", 32, 64},
+    SectionSpec{"Vector Registers", 64, 96},
+};
+```
+
+**This resolved the visibility issue.** The GUI now displays a third collapsible section containing `v0` through `v31`.
+
+---
+
+## 8. Current assembler test
+
+Test program:
+
+```asm
+addi t1, zero, 10
+vsetvli t0, zero, 192
+vadd.vv v3, v2, v1
+```
+
+Assembler output:
+
+```asm
+0000000000000000 <start>:
+
+  0: 00a00313             addi x6, x0, 10
+
+  4: 0c0072d7             vsetvli x5, x0, 192
+
+  8: 021101d7             vadd.vv v3, v2, v1
+```
+
+Encoding checks:
+
+- `0x0c0072d7`: `vsetvli x5, x0, 192`
+- `0x021101d7`: `vadd.vv v3, v2, v1`
+
+The assembler successfully generated these instructions.
+
+**Important:** Assembler success and GUI visibility have been confirmed. Complete runtime correctness of vector arithmetic, register refresh, and undo/redo still needs dedicated testing.
+
+---
+
+## 9. Build instructions
+
+When adding a new `.cpp` file, CMake must be reconfigured because the project uses a source-file glob without `CONFIGURE_DEPENDS`.
+
+Use:
+
+```bash
+cmake -S . -B build
+cmake --build build -j$(nproc)
+```
+
+For subsequent changes that do not add new source files:
+
+```bash
+cmake --build build -j$(nproc)
+```
+
+---
+
+## 10. Known limitations and pending work
+
+The current implementation is an initial working subset, not complete RVV support.
+
+### Execution limitations
+
+- Only `vadd.vv` is implemented.
+- Only unmasked vector addition is supported.
+- Only LMUL=1 is supported.
+- `vstart` is not yet handled by vector execution.
+- Tail and mask agnostic policies are not implemented.
+- Masked operations are not implemented.
+- Other vector arithmetic instructions are not implemented.
+- Full `vsetvli` AVL special-case semantics are not implemented.
+
+### GUI and register-state follow-ups
+
+- Check that `WriteVectorElement()` emits `updateVRegister` or that the completed vector is committed through `WriteVreg()`. Otherwise, the GUI may not refresh after element-wise writes.
+- Check `RegisterModel::changeRegisterFile()`: it must also connect `updateVRegister` when switching to a different register file.
+- The current constructor connection appears to have a duplicate `updateVRegister` connection. Remove the duplicate and ensure the connection exists in `changeRegisterFile()`.
+- Test undo and redo for vector register updates.
+- Test whether the GUI correctly highlights the changed vector register.
+
+### Testing improvements
+
+A better arithmetic test should initialize the source vector registers with nonzero values before executing `vadd.vv`.
+
+Then verify:
+
+1. `vsetvli` sets the expected `vl` and `vtype`.
+2. `vadd.vv` produces the expected element values.
+3. The destination register is displayed correctly.
+4. Undo restores the previous destination.
+5. Redo restores the computed result.
+
+---
+
+## 11. Suggested implementation roadmap
+
+1. Finish testing `vsetvli` and `vadd.vv` at runtime.
+2. Fix any vector register UI refresh or register-file reconnection issues.
+3. Verify undo/redo.
+4. Implement `vsub.vv`.
+5. Implement additional vector arithmetic instructions.
+6. Add masked vector operations.
+7. Add proper `vstart`, tail, and mask policy handling.
+8. Extend support beyond LMUL=1.
+9. Improve assembler syntax to support named VTYPE configurations.
+10. Add automated assembler and processor tests.
+
+---
+
+**Current milestone:** Initial vector register storage, `vsetvli` and `vadd.vv` assembler support, restricted processor execution, undo/redo data structures, and GUI display of all 32 vector registers have been implemented. Runtime validation and the listed follow-up fixes remain.
+
+Individual instruction — changes for each new instruction
+- Instruction syntax and operand format (if new)
+- Machine-code encoding
+- Instruction decoding
+- Execution logic
+- Tests

@@ -15,14 +15,19 @@ RegisterModel::RegisterModel(QObject *parent, RegisterFile *regfile) : QAbstract
             &RegisterModel::updateRegisterValue);
     connect(m_currentRegisterFile, &RegisterFile::updateFRegister, this,
             &RegisterModel::updateFRegisterValue);
+            connect(m_currentRegisterFile, &RegisterFile::updateVRegister, this,
+        &RegisterModel::updateVRegisterValue);
     connect(m_currentRegisterFile, &RegisterFile::registerResetSignal, this,
             &RegisterModel::registerResetSlot);
+            connect(m_currentRegisterFile, &RegisterFile::updateVRegister, this,
+        &RegisterModel::updateVRegisterValue);
+
 }
 
 int RegisterModel::rowCount(const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    return 64;
+    return 96;
 }
 
 int RegisterModel::columnCount(const QModelIndex &parent) const
@@ -80,15 +85,14 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
         size_t row = static_cast<size_t>(index.row());
         switch (index.column())
         {
-        case 0: // Register Name
-            if (row < 32)
-            {
-                return QString("x%1").arg(row);
-            }
-            else
-            {
-                return QString("f%1").arg(row - 32);
-            }
+
+   case 0: // Register Name
+    if (row < 32)
+        return QString("x%1").arg(row);
+    else if (row < 64)
+        return QString("f%1").arg(row - 32);
+    else
+        return QString("v%1").arg(row - 64);
         case 1: // Register Alias
         {
             if (row < 32)
@@ -153,10 +157,22 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
                 }
                 }
             }
-            else
-            {
-                return QString("");
-            } // TODO : add floating point register support
+           else if (row < 64)
+{
+    return QString("");
+}
+else
+{
+    auto bytes = m_currentRegisterFile->ReadVreg(row - 64);
+
+    QString value = "0x";
+    for (int i = static_cast<int>(bytes.size()) - 1; i >= 0; --i)
+    {
+        value += QString("%1").arg(bytes[i], 2, 16, QChar('0')).toUpper();
+    }
+
+    return value;
+}
         }
         default:
             return QVariant{};
@@ -199,6 +215,12 @@ void RegisterModel::updateFRegisterValue(size_t regIndex, uint64_t value)
     //QModelIndex index = this->index(static_cast<int>(regIndex + 32), 2);
     m_highlightedRegisterIndex = regIndex + 32; // Update highlighted register index
     // emit dataChanged(index,index);
+    beginResetModel();
+    endResetModel();
+}
+void RegisterModel::updateVRegisterValue(size_t regIndex)
+{
+    m_highlightedRegisterIndex = regIndex + 64;
     beginResetModel();
     endResetModel();
 }

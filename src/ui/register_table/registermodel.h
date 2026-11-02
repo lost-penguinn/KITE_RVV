@@ -32,6 +32,7 @@ class RegisterModel : public QAbstractTableModel
     size_t m_highlightedRegisterIndex = -1; // No register highlighted by default
   public slots:
     void updateRegisterValue(size_t regIndex, uint64_t value);
+    void updateVRegisterValue(size_t regIndex);
     void registerResetSlot();
     void updateFRegisterValue(size_t regIndex, uint64_t value);
 };

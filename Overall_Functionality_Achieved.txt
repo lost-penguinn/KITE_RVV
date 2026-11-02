@@ -1,0 +1,197 @@
+# Kites RISC-V Simulator – Current Capabilities
+
+## 1. Project Overview
+
+Kites is a RISC-V processor simulator that has been extended with a partial implementation of the RISC-V Vector Extension (RVV).
+
+The current implementation allows assembly programs to configure vector registers, initialize vector data, perform arithmetic and logical operations, execute reductions, and transfer vector data between memory and vector registers.
+
+The implementation includes changes across the assembler, instruction decoder, processor execution logic, register file, and execution-history tracking.
+
+## 2. Vector Architecture
+
+The current vector implementation uses the following configuration:
+
+| Parameter | Current Configuration |
+|---|---|
+| VLEN | 128 bits |
+| VLEN in bytes | 16 bytes |
+| ELEN | 64 bits |
+| Number of vector registers | 32 |
+| Vector registers | v0–v31 |
+| Supported LMUL | 1 |
+| Vector CSRs | vstart, vl, vtype, vlenb |
+
+Vector registers are represented internally using fixed-size byte arrays. This allows individual elements to be accessed and modified according to the configured element width.
+
+The implementation also includes helper functions for reading and writing vector registers and accessing individual vector elements.
+
+## 3. Implemented Instructions
+
+### 3.1 Vector Configuration
+
+- `vsetvli`
+
+The simulator supports vector configuration through `vsetvli`, including SEW selection, LMUL=1 configuration, AVL handling, VLMAX calculation, and illegal vector-type detection.
+
+### 3.2 Vector Initialization
+
+- `vmv.v.i` – Initialize vector elements using an immediate.
+- `vmv.v.x` – Initialize vector elements using a scalar general-purpose register.
+
+### 3.3 Vector Arithmetic
+
+**Vector-vector operations:**
+
+- `vadd.vv` – Vector addition.
+- `vsub.vv` – Vector subtraction.
+- `vmul.vv` – Vector multiplication.
+
+**Vector-scalar operations:**
+
+- `vadd.vx` – Add a scalar to vector elements.
+- `vsub.vx` – Subtract a scalar from vector elements.
+- `vrsub.vx` – Subtract vector elements from a scalar.
+- `vmul.vx` – Multiply vector elements by a scalar.
+
+### 3.4 Vector Logical Operations
+
+**Vector-vector operations:**
+
+- `vand.vv` – Bitwise AND.
+- `vor.vv` – Bitwise OR.
+- `vxor.vv` – Bitwise XOR.
+
+**Vector-scalar operations:**
+
+- `vand.vx` – Bitwise AND with a scalar.
+- `vor.vx` – Bitwise OR with a scalar.
+- `vxor.vx` – Bitwise XOR with a scalar.
+
+### 3.5 Vector Memory Operations
+
+- `vle32.v` – Load 32-bit elements from memory into a vector register.
+- `vse32.v` – Store 32-bit vector elements into memory.
+
+These instructions allow vector operations to work on data stored in the simulator's memory rather than requiring all values to be initialized directly in vector registers.
+
+### 3.6 Vector Reduction Operations
+
+- `vredsum.vs` – Sum reduction.
+- `vredand.vs` – Bitwise AND reduction.
+- `vredor.vs` – Bitwise OR reduction.
+- `vredxor.vs` – Bitwise XOR reduction.
+- `vredmin.vs` – Signed minimum reduction.
+- `vredmax.vs` – Signed maximum reduction.
+- `vredminu.vs` – Unsigned minimum reduction.
+- `vredmaxu.vs` – Unsigned maximum reduction.
+
+Reduction instructions combine multiple active vector elements into a single result, using an initial accumulator value.
+
+Signed and unsigned minimum/maximum reductions have been tested with values that distinguish signed from unsigned comparisons.
+
+## 4. C++ Implementation
+
+The RVV implementation involves modifications across multiple layers of the simulator.
+
+### Register File
+
+The register file was extended with vector-register storage and access functions.
+
+These functions support:
+- Reading complete vector registers.
+- Writing complete vector registers.
+- Reading individual elements.
+- Writing individual elements.
+- Accessing vector CSRs.
+
+### Instruction Decoding
+
+The processor identifies vector instructions using the RISC-V vector opcode and extracts fields such as:
+
+- Destination register (`vd`).
+- Source registers (`vs1`, `vs2`).
+- Function fields (`funct3`, `funct6`).
+- Mask enable field (`vm`).
+
+Decoded operations are mapped to internal operation identifiers before execution.
+
+### Vector Execution
+
+The main vector execution logic is implemented in `RVSSProcessor::ExecuteVector()`.
+
+It handles:
+- Vector configuration retrieval.
+- Element-width and active-length calculation.
+- Reading source vector registers.
+- Executing arithmetic and logical operations.
+- Executing reduction operations.
+- Updating destination vector registers.
+
+The implementation uses byte-level vector storage and element-width-aware access to perform calculations.
+
+### Assembler Support
+
+Assembler support was added by extending instruction registration, syntax recognition, and machine-code generation.
+
+A reusable vector-vector encoding helper was introduced to reduce duplicated encoding logic for instructions that share the same instruction format.
+
+### Undo and Execution History
+
+Vector-register modifications are recorded through the simulator's existing register-change tracking mechanism.
+
+This allows vector-register updates to participate in execution-history and undo functionality.
+
+## 5. Verified Functionality
+
+The following categories have been built and tested in the simulator:
+
+- Vector configuration and VLMAX calculation.
+- Immediate and scalar vector initialization.
+- Vector-vector arithmetic.
+- Vector-scalar arithmetic.
+- Vector-vector logical operations.
+- Vector-scalar logical operations.
+- 32-bit vector memory loads and stores.
+- Sum and bitwise reductions.
+- Signed and unsigned minimum/maximum reductions.
+- Vector-register update tracking.
+
+Testing has included checking resulting values by storing vector registers into memory and inspecting the simulator's Memory view.
+
+## 6. Current Limitations and Future Work
+
+The current implementation is a subset of RVV rather than a complete RVV 1.0 implementation.
+
+Important features that remain to be implemented include:
+
+| Feature | Status |
+|---|---|
+| 8-bit vector loads and stores | Not implemented |
+| 16-bit vector loads and stores | Not implemented |
+| Wider LMUL configurations | Not implemented |
+| Masked vector execution | Not implemented |
+| Vector comparison instructions | Not implemented |
+| Vector shift instructions | Not implemented |
+| Vector slide and permutation instructions | Not implemented |
+| Floating-point vector operations | Not implemented |
+| Complete RVV 1.0 compliance | Not achieved |
+
+Additional work is also needed to broaden instruction coverage, validate behavior across different legal SEW configurations, and improve testing.
+
+## 7. Overall Status
+
+Kites currently supports a meaningful subset of RISC-V Vector functionality.
+
+It can execute vector assembly programs that:
+
+1. Configure vector execution parameters.
+2. Initialize vector registers.
+3. Load vector data from memory.
+4. Perform arithmetic and bitwise operations.
+5. Reduce vector elements into scalar results.
+6. Store vector results back into memory.
+
+The work goes beyond instruction recognition: it includes assembler encoding, processor decoding, C++ execution logic, vector-register management, memory interaction, and execution-history integration.
+
+**Current milestone:** A functional, partially implemented RVV extension with tested configuration, initialization, arithmetic, logical, memory, and reduction operations.

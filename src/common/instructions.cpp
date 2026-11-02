@@ -375,8 +375,21 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fld", "fsd", "fmadd.d", "fmsub.d", "fnmsub.d", "fnmadd.d", "fadd.d", "fsub.d", "fmul.d",
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
-    "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x"
-
+    "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
+    "vadd.vv", "vsub.vv", "vmul.vv",
+"vand.vv", "vor.vv", "vxor.vv",
+"vadd.vx", "vsub.vx", "vrsub.vx", "vmul.vx",
+"vsetvli", "vmv.v.i", "vmv.v.x",
+"vle32.v", "vse32.v",
+"vand.vx", "vor.vx", "vxor.vx",
+"vredsum.vs",
+"vredand.vs",
+"vredor.vs",
+"vredxor.vs",
+"vredmin.vs",
+"vredmax.vs",
+"vredminu.vs",
+"vredmaxu.vs",
 };
 
 static const std::unordered_set<std::string> RTypeInstructions = {
@@ -966,6 +979,32 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"fmv.d.x", {SyntaxType::O_FPR_C_GPR}}, // f[n][0:63] to x[m][0:63], 64-bit floating-point value
                                             // from an x (integer) register into an f
                                             // (floating-point) register without conversion
+    {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_I}},
+    {"vmv.v.i", {SyntaxType::O_VEC_C_I}},
+    {"vmv.v.x", {SyntaxType::O_VEC_C_GPR}},
+    {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vand.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vor.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vxor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vadd.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vsub.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vrsub.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vmul.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vle32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+{"vse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+{"vand.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vor.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vxor.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
+{"vredsum.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredand.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredor.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredxor.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredmin.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredmax.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredminu.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+{"vredmaxu.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
 
 };
 
@@ -1206,6 +1245,8 @@ std::string getExpectedSyntaxes(const std::string &opcode)
         {SyntaxType::O_GPR_C_FPR_C_RM, "<gp-reg>, <fp-reg>, <rm>"},
         {SyntaxType::O_GPR_C_FPR_C_FPR, "<gp-reg>, <fp-reg>, <fp-reg>"},
         {SyntaxType::O_FPR_C_I_LP_GPR_RP, "<fp-reg>, <imm>(<gp-reg>)"},
+        {SyntaxType::O_VEC_C_I, "<vec-reg>, <imm>"},
+        {SyntaxType::O_VEC_C_GPR, "<vec-reg>, <gp-reg>"},
     };
 
     std::string syntaxes;

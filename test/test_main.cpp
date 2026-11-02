@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <windows.h>
 #include <QLoggingCategory>
 
 int main(int argc, char *argv[]) 
