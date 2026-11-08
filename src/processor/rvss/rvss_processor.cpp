@@ -5,10 +5,10 @@
  */
 
 #include "processor/rvss/rvss_processor.h"
-#include "common/vector_defs.h"
-#include "common/instructions.h"
-#include "config/config.h"
 #include "common/globals.h"
+#include "common/instructions.h"
+#include "common/vector_defs.h"
+#include "config/config.h"
 #include "ui/processor_tab/processor_designs/rvss_processor_circuit_scene.h"
 #include "utils/utils.h"
 #include <QDebug>
@@ -101,13 +101,12 @@ void RVSSProcessor::SetActiveWireNames()
     {
         active_wires_.append("Control_to_MemtoRegMux");
     }
-
 }
 
 void RVSSProcessor::setProcessorState()
 {
-    processor_state_.programCounters = 
-    {program_counter_,INVALID_PC,INVALID_PC,INVALID_PC,INVALID_PC};
+    processor_state_.programCounters = {program_counter_, INVALID_PC, INVALID_PC, INVALID_PC,
+                                        INVALID_PC};
     processor_state_.lastExecutedPC = last_executed_pc_;
 }
 
@@ -200,16 +199,16 @@ void RVSSProcessor::Execute()
         return;
     }
     else if (opcode == 0b1010111)
-{
-    uint8_t funct3 = (current_instruction_ >> 12) & 0x7;
+    {
+        uint8_t funct3 = (current_instruction_ >> 12) & 0x7;
 
-    if (funct3 == 0b111)
-        ExecuteVsetvli();
-    else
-        ExecuteVector();
+        if (funct3 == 0b111)
+            ExecuteVsetvli();
+        else
+            ExecuteVector();
 
-    return;
-}
+        return;
+    }
     uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
     uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
 
@@ -630,14 +629,14 @@ void RVSSProcessor::WriteVectorMemory()
     const uint32_t inst = current_instruction_;
 
     const uint32_t opcode = inst & 0x7F;
-    const uint32_t vreg   = (inst >> 7) & 0x1F;
-    const uint32_t width  = (inst >> 12) & 0x7;
-    const uint32_t rs1    = (inst >> 15) & 0x1F;
-    const uint32_t lumop  = (inst >> 20) & 0x1F;
-    const uint32_t vm     = (inst >> 25) & 0x1;
-    const uint32_t mop    = (inst >> 26) & 0x3;
-    const uint32_t mew    = (inst >> 28) & 0x1;
-    const uint32_t nf     = (inst >> 29) & 0x7;
+    const uint32_t vreg = (inst >> 7) & 0x1F;
+    const uint32_t width = (inst >> 12) & 0x7;
+    const uint32_t rs1 = (inst >> 15) & 0x1F;
+    const uint32_t lumop = (inst >> 20) & 0x1F;
+    const uint32_t vm = (inst >> 25) & 0x1;
+    const uint32_t mop = (inst >> 26) & 0x3;
+    const uint32_t mew = (inst >> 28) & 0x1;
+    const uint32_t nf = (inst >> 29) & 0x7;
 
     const bool is_load = (opcode == 0x07);
     const bool is_store = (opcode == 0x27);
@@ -645,8 +644,7 @@ void RVSSProcessor::WriteVectorMemory()
     if (!is_load && !is_store)
         return;
 
-    if (width != 0b110 || lumop != 0 || vm != 1 ||
-        mop != 0 || mew != 0 || nf != 0)
+    if (width != 0b110 || lumop != 0 || vm != 1 || mop != 0 || mew != 0 || nf != 0)
     {
         std::cerr << "Unsupported vector memory addressing mode\n";
         return;
@@ -674,9 +672,8 @@ void RVSSProcessor::WriteVectorMemory()
         return;
     }
 
-    const uint64_t vl = std::min<uint64_t>(
-        registers_.ReadCsr(vconst::kCsrVl),
-        vec::vlmax(raw_vtype));
+    const uint64_t vl =
+        std::min<uint64_t>(registers_.ReadCsr(vconst::kCsrVl), vec::vlmax(raw_vtype));
 
     const uint64_t base = registers_.ReadGpr(rs1);
     std::cerr << "\n[VEC-MEM]"
@@ -690,27 +687,27 @@ void RVSSProcessor::WriteVectorMemory()
         const auto old_vd = registers_.ReadVreg(vreg);
         auto new_vd = old_vd;
 
+       
         for (uint64_t i = 0; i < vl; ++i)
         {
             const uint32_t value =
                 memory_controller_.readWord(base + i * 4);
-                std::cerr << "[VLE32] element=" << i
-          << " address=0x" << std::hex << (base + i * 4)
-          << " value=" << value << std::dec << '\n';
+            std::cerr << "[VLE32] element=" << i
+                      << " address=0x" << std::hex << (base + i * 4)
+                      << " value=" << value << std::dec << '\n';
 
             for (size_t byte = 0; byte < 4; ++byte)
             {
-                new_vd[i * 4 + byte] =
-                    static_cast<uint8_t>((value >> (byte * 8)) & 0xFF);
+                new_vd[i * 4 + byte] = static_cast<uint8_t>((value >> (byte * 8)) & 0xFF);
             }
         }
 
         registers_.WriteVreg(vreg, new_vd);
+        
 
         if (old_vd != new_vd)
         {
-            current_delta_.register_changes.push_back(
-                {vreg, 3, 0, 0, old_vd, new_vd});
+            current_delta_.register_changes.push_back({vreg, 3, 0, 0, old_vd, new_vd});
         }
     }
     else
@@ -728,11 +725,9 @@ void RVSSProcessor::WriteVectorMemory()
 
             for (size_t byte = 0; byte < 4; ++byte)
             {
-                value |= static_cast<uint32_t>(source[i * 4 + byte])
-                         << (byte * 8);
+                value |= static_cast<uint32_t>(source[i * 4 + byte]) << (byte * 8);
 
-                old_bytes_vec.push_back(
-                    memory_controller_.peekByte(addr + byte));
+                old_bytes_vec.push_back(memory_controller_.peekByte(addr + byte));
             }
 
             memory_controller_.writeWord(addr, value);
@@ -742,15 +737,13 @@ void RVSSProcessor::WriteVectorMemory()
 
             for (size_t byte = 0; byte < 4; ++byte)
             {
-                new_bytes_vec.push_back(
-                    memory_controller_.peekByte(addr + byte));
+                new_bytes_vec.push_back(memory_controller_.peekByte(addr + byte));
             }
         }
 
         if (old_bytes_vec != new_bytes_vec)
         {
-            current_delta_.memory_changes.push_back(
-                {base, old_bytes_vec, new_bytes_vec});
+            current_delta_.memory_changes.push_back({base, old_bytes_vec, new_bytes_vec});
         }
     }
 }
@@ -759,10 +752,10 @@ void RVSSProcessor::WriteMemory()
 {
     uint8_t opcode = current_instruction_ & 0b1111111;
     if (opcode == 0x07 || opcode == 0x27)
-{
-    WriteVectorMemory();
-    return;
-}
+    {
+        WriteVectorMemory();
+        return;
+    }
     uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
     uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
 
@@ -1003,7 +996,8 @@ void RVSSProcessor::WriteBack()
         case 0b0110011: // R-Type
         case 0b0010011: // I-Type
         case 0b0010111: // AUIPC
-        case 0b0111011: // R4-Type / OP-32 (ADDW, SUBW, MULW, DIVW, DIVUW, REMW, REMUW, SLLW, SRLW, SRAW)
+        case 0b0111011: // R4-Type / OP-32 (ADDW, SUBW, MULW, DIVW, DIVUW, REMW, REMUW, SLLW, SRLW,
+                        // SRAW)
         case 0b0011011: // I-type OP-32 (ADDIW, SLLIW, SRLIW, SRAIW)
         {
             registers_.WriteGpr(rd, execution_result_);
@@ -1048,21 +1042,21 @@ void RVSSProcessor::WriteBack()
 }
 void RVSSProcessor::ExecuteVsetvli()
 {
-    const uint8_t  rd   = (current_instruction_ >> 7)  & 0x1F;
-    const uint8_t  rs1  = (current_instruction_ >> 15) & 0x1F;
+    const uint8_t rd = (current_instruction_ >> 7) & 0x1F;
+    const uint8_t rs1 = (current_instruction_ >> 15) & 0x1F;
     const uint64_t zimm = (current_instruction_ >> 20) & 0x7FF;
 
     const uint64_t old_vtype = registers_.ReadCsr(vconst::kCsrVtype);
-    const uint64_t old_vl    = registers_.ReadCsr(vconst::kCsrVl);
-    const uint64_t old_rd    = registers_.ReadGpr(rd);
+    const uint64_t old_vl = registers_.ReadCsr(vconst::kCsrVl);
+    const uint64_t old_rd = registers_.ReadGpr(rd);
 
     uint64_t new_vtype = zimm;
-    uint64_t new_vl    = 0;
+    uint64_t new_vl = 0;
 
     if (!vec::isLegalVtype(zimm))
     {
-        new_vtype = vconst::kVtypeVill;             // unsupported request: vill set, vl = 0
-        new_vl    = 0;
+        new_vtype = vconst::kVtypeVill; // unsupported request: vill set, vl = 0
+        new_vl = 0;
     }
     else if (rs1 != 0)
     {
@@ -1070,16 +1064,16 @@ void RVSSProcessor::ExecuteVsetvli()
     }
     else if (rd != 0)
     {
-        new_vl = vec::vlmax(zimm);                  // rs1 = x0, rd != x0: request VLMAX
+        new_vl = vec::vlmax(zimm); // rs1 = x0, rd != x0: request VLMAX
     }
     else if (vec::isLegalVtype(old_vtype) && vec::vlmax(old_vtype) == vec::vlmax(zimm))
     {
-        new_vl = old_vl;                            // rd = rs1 = x0: keep vl, change type only
+        new_vl = old_vl; // rd = rs1 = x0: keep vl, change type only
     }
     else
     {
-        new_vtype = vconst::kVtypeVill;             // that would change VLMAX: not allowed
-        new_vl    = 0;
+        new_vtype = vconst::kVtypeVill; // that would change VLMAX: not allowed
+        new_vl = 0;
     }
 
     registers_.WriteCsr(vconst::kCsrVtype, new_vtype);
@@ -1099,253 +1093,398 @@ void RVSSProcessor::ExecuteVsetvli()
 }
 void RVSSProcessor::ExecuteVector()
 {
-    const uint32_t inst   = current_instruction_;
-    const uint8_t  opcode = inst & 0x7F;
-    const uint8_t  vd     = (inst >> 7)  & 0x1F;
-    const uint8_t  funct3 = (inst >> 12) & 0x7;
-    const uint8_t  vs1    = (inst >> 15) & 0x1F;   // also rs1 (OPIVX) or simm5 (OPIVI)
-    const uint8_t  vs2    = (inst >> 20) & 0x1F;
-    const uint8_t  vm     = (inst >> 25) & 0x1;
-    const uint8_t  funct6 = (inst >> 26) & 0x3F;
+    const uint32_t inst = current_instruction_;
+    const uint8_t opcode = inst & 0x7F;
+    const uint8_t vd = (inst >> 7) & 0x1F;
+    const uint8_t funct3 = (inst >> 12) & 0x7;
+    const uint8_t vs1 = (inst >> 15) & 0x1F; // also rs1 (OPIVX) or simm5 (OPIVI)
+    const uint8_t vs2 = (inst >> 20) & 0x1F;
+    const uint8_t vm = (inst >> 25) & 0x1;
+    const uint8_t funct6 = (inst >> 26) & 0x3F;
 
-  enum class Op
-{
-    VaddVV,
-    VsubVV,
-    VmulVV,
-    VandVV,
-    VorVV,
-    VxorVV,
-    VredsumVS,
-    VredandVS,
-VredorVS,
-VredxorVS,
-VredminVS,
-VredmaxVS,
-VredminuVS,
-VredmaxuVS,
+    enum class Op
+    {
+        VaddVV, VsubVV, VmulVV,
+        VandVV, VorVV, VxorVV,
 
-    VaddVX,
-    VsubVX,
-    VrsubVX,
-    VmulVX,
+        VminVV, VmaxVV, VminuVV, VmaxuVV,
 
-    VmvVX,
-    VmvVI,
-    VandVX,
-VorVX,
-VxorVX,
-    Unsupported
-} op = Op::Unsupported;
+        VmseqVV, VmsneVV, VmsltVV, VmsltuVV,
+        VmsleVV, VmsleuVV,
 
-if (opcode == 0x57 && funct3 == 0b000)
-{
-    if      (funct6 == 0b000000) op = Op::VaddVV;
-    else if (funct6 == 0b000010) op = Op::VsubVV;
-    else if (funct6 == 0b001001) op = Op::VandVV;
-    else if (funct6 == 0b001010) op = Op::VorVV;
-    else if (funct6 == 0b001011) op = Op::VxorVV;
-}
-else if (opcode == 0x57 && funct6 == 0b100101 && funct3 == 0b010)
-{
-    op = Op::VmulVV;
-}
-else if (opcode == 0x57 && funct3 == 0b010)
-{
-    if      (funct6 == 0b000000) op = Op::VredsumVS;
-    else if (funct6 == 0b000001) op = Op::VredandVS;
-    else if (funct6 == 0b000010) op = Op::VredorVS;
-    else if (funct6 == 0b000011) op = Op::VredxorVS;
-    else if (funct6 == 0b000100) op = Op::VredminuVS;
-    else if (funct6 == 0b000101) op = Op::VredminVS;
-    else if (funct6 == 0b000110) op = Op::VredmaxuVS;
-    else if (funct6 == 0b000111) op = Op::VredmaxVS;
-}
-else if (opcode == 0x57 && funct3 == 0b100)
-{
-    if (funct6 == 0b010111 && vs2 == 0)
-        op = Op::VmvVX;
-    else if (funct6 == 0b000000)
-        op = Op::VaddVX;
-    else if (funct6 == 0b000010) op = Op::VsubVX;
-    else if (funct6 == 0b000011) op = Op::VrsubVX;
-    else if (funct6 == 0b100101) op = Op::VmulVX;
-    else if (funct6 == 0b001001) op = Op::VandVX;
-else if (funct6 == 0b001010) op = Op::VorVX;
-else if (funct6 == 0b001011) op = Op::VxorVX;
-}
-else if (opcode == 0x57 && funct6 == 0b010111 && vs2 == 0 && funct3 == 0b100)
-{
-    op = Op::VmvVX;
-}
-else if (opcode == 0x57 && funct6 == 0b010111 && vs2 == 0 && funct3 == 0b011)
-{
-    op = Op::VmvVI;
-}
+        VfaddVV, VfsubVV, VfmulVV, VfdivVV,
 
+        VredsumVS, VredandVS, VredorVS, VredxorVS,
+        VredminVS, VredmaxVS, VredminuVS, VredmaxuVS,
+
+        VaddVX, VsubVX, VrsubVX, VmulVX,
+        VandVX, VorVX, VxorVX,
+
+        VmvVX, VmvVI,
+
+        Unsupported
+    } op = Op::Unsupported;
+
+    if (opcode == 0x57 && funct3 == 0b000)
+    {
+        if      (funct6 == 0b000000) op = Op::VaddVV;
+        else if (funct6 == 0b000010) op = Op::VsubVV;
+        else if (funct6 == 0b001001) op = Op::VandVV;
+        else if (funct6 == 0b001010) op = Op::VorVV;
+        else if (funct6 == 0b001011) op = Op::VxorVV;
+
+        else if (funct6 == 0b000101) op = Op::VminVV;
+        else if (funct6 == 0b000111) op = Op::VmaxVV;
+        else if (funct6 == 0b000100) op = Op::VminuVV;
+        else if (funct6 == 0b000110) op = Op::VmaxuVV;
+
+        else if (funct6 == 0b011000) op = Op::VmseqVV;
+        else if (funct6 == 0b011001) op = Op::VmsneVV;
+        else if (funct6 == 0b011010) op = Op::VmsltuVV;
+        else if (funct6 == 0b011011) op = Op::VmsltVV;
+        else if (funct6 == 0b011100) op = Op::VmsleuVV;
+        else if (funct6 == 0b011101) op = Op::VmsleVV;
+    }
+    else if (opcode == 0x57 && funct3 == 0b001)
+    {
+        if      (funct6 == 0b000000) op = Op::VfaddVV;
+        else if (funct6 == 0b000010) op = Op::VfsubVV;
+        else if (funct6 == 0b100100) op = Op::VfmulVV;
+        else if (funct6 == 0b100000) op = Op::VfdivVV;
+    }
+    else if (opcode == 0x57 && funct3 == 0b010)
+    {
+        if      (funct6 == 0b100101) op = Op::VmulVV;
+        else if (funct6 == 0b000000) op = Op::VredsumVS;
+        else if (funct6 == 0b000001) op = Op::VredandVS;
+        else if (funct6 == 0b000010) op = Op::VredorVS;
+        else if (funct6 == 0b000011) op = Op::VredxorVS;
+        else if (funct6 == 0b000100) op = Op::VredminuVS;
+        else if (funct6 == 0b000101) op = Op::VredminVS;
+        else if (funct6 == 0b000110) op = Op::VredmaxuVS;
+        else if (funct6 == 0b000111) op = Op::VredmaxVS;
+    }
+    else if (opcode == 0x57 && funct3 == 0b100)
+    {
+        if      (funct6 == 0b010111 && vs2 == 0) op = Op::VmvVX;
+        else if (funct6 == 0b000000) op = Op::VaddVX;
+        else if (funct6 == 0b000010) op = Op::VsubVX;
+        else if (funct6 == 0b000011) op = Op::VrsubVX;
+        else if (funct6 == 0b100101) op = Op::VmulVX;
+        else if (funct6 == 0b001001) op = Op::VandVX;
+        else if (funct6 == 0b001010) op = Op::VorVX;
+        else if (funct6 == 0b001011) op = Op::VxorVX;
+    }
+    else if (opcode == 0x57 && funct6 == 0b010111 &&
+             vs2 == 0 && funct3 == 0b011)
+    {
+        op = Op::VmvVI;
+    }
 
     if (op == Op::Unsupported)
-    { std::cerr << "Unsupported vector instruction\n"; return; }
-    if (vm != 1)                                       // vm = 0 is masking (or vmerge for funct6 010111)
-    { std::cerr << "Masked vector instructions are not supported yet\n"; return; }
+    {
+        std::cerr << "Unsupported vector instruction\n";
+        return;
+    }
+    if (vm != 1) // vm = 0 is masking (or vmerge for funct6 010111)
+    {
+        std::cerr << "Masked vector instructions are not supported yet\n";
+        return;
+    }
 
     const uint64_t raw_vtype = registers_.ReadCsr(vconst::kCsrVtype);
-    if (!vec::isLegalVtype(raw_vtype))                 // also true when vill is set
-    { std::cerr << "Illegal instruction: vtype is invalid (vill)\n"; return; }
+    if (!vec::isLegalVtype(raw_vtype)) // also true when vill is set
+    {
+        std::cerr << "Illegal instruction: vtype is invalid (vill)\n";
+        return;
+    }
     const vec::VType vtype = vec::decodeVtype(raw_vtype);
     if (vtype.vlmul != 0)
-    { std::cerr << "Only LMUL=1 is supported yet\n"; return; }
+    {
+        std::cerr << "Only LMUL=1 is supported yet\n";
+        return;
+    }
+    if ((op == Op::VfaddVV || op == Op::VfsubVV || op == Op::VfmulVV || op == Op::VfdivVV ) &&
+    vec::sewBits(vtype.vsew) != 32)
+    {
+        std::cerr << "vfadd.vv and vfsub.vv currently support only SEW=32 (FP32)\n";
+        return;
+    }
 
-    const size_t   sew_bytes = vec::sewBits(vtype.vsew) / 8;
-    const uint64_t vl        = std::min<uint64_t>(registers_.ReadCsr(vconst::kCsrVl), vec::vlmax(raw_vtype));
+    const size_t sew_bytes = vec::sewBits(vtype.vsew) / 8;
+    const uint64_t vl =
+        std::min<uint64_t>(registers_.ReadCsr(vconst::kCsrVl), vec::vlmax(raw_vtype));
 
-    uint64_t splat = 0;                                // value for the vmv forms; low SEW bits are stored
+    uint64_t splat = 0; // value for the vmv forms; low SEW bits are stored
     if (op == Op::VmvVX)
         splat = registers_.ReadGpr(vs1);
     else if (op == Op::VmvVI)
-        splat = static_cast<uint64_t>(static_cast<int64_t>(vs1 ^ 0x10) - 0x10);   // sign-extend simm5
+        splat = static_cast<uint64_t>(static_cast<int64_t>(vs1 ^ 0x10) - 0x10); // sign-extend simm5
 
     const auto old_vd = registers_.ReadVreg(vd);
-    auto       new_vd = old_vd;                        // lanes at or beyond vl stay as they were
-     if (op == Op::VredsumVS ||
+        auto new_vd = old_vd;
+
+    const bool isReduction =
+        op == Op::VredsumVS ||
         op == Op::VredandVS ||
         op == Op::VredorVS ||
         op == Op::VredxorVS ||
         op == Op::VredminVS ||
         op == Op::VredmaxVS ||
         op == Op::VredminuVS ||
-        op == Op::VredmaxuVS)
+        op == Op::VredmaxuVS;
+
+    const bool isComparison =
+        op == Op::VmseqVV ||
+        op == Op::VmsneVV ||
+        op == Op::VmsltVV ||
+        op == Op::VmsltuVV ||
+        op == Op::VmsleVV ||
+        op == Op::VmsleuVV;
+
+    if (isReduction)
     {
-    // Reduction instructions require vstart = 0.
-    if (registers_.ReadCsr(vconst::kCsrVstart) != 0)
-    {
-        std::cerr << "Nonzero vstart is not supported for reductions\n";
-        return;
-    }
-
-    // Initial accumulator comes from element 0 of vs1.
-    uint64_t value =
-        registers_.ReadVectorElement(vs1, sew_bytes, 0);
-
-    // Add all active elements of vs2.
-   for (uint64_t i = 0; i < vl; ++i)
-{
-    const uint64_t element =
-        registers_.ReadVectorElement(vs2, sew_bytes, i);
-
-    switch (op)
-    {
-        case Op::VredsumVS:
-            value += element;
-            break;
-
-        case Op::VredandVS:
-            value &= element;
-            break;
-
-        case Op::VredorVS:
-            value |= element;
-            break;
-
-        case Op::VredxorVS:
-            value ^= element;
-            break;
-
-        case Op::VredminVS:
-        case Op::VredmaxVS:
+        if (registers_.ReadCsr(vconst::kCsrVstart) != 0)
         {
-            const unsigned sew_bits = sew_bytes * 8;
-            const uint64_t sign_bit = uint64_t{1} << (sew_bits - 1);
-
-            const int64_t signed_value =
-                static_cast<int64_t>((value ^ sign_bit) - sign_bit);
-            const int64_t signed_element =
-                static_cast<int64_t>((element ^ sign_bit) - sign_bit);
-
-            if (op == Op::VredminVS && signed_value > signed_element)
-                value = element;
-
-            if (op == Op::VredmaxVS && signed_value < signed_element)
-                value = element;
-
-            break;
+            std::cerr << "Nonzero vstart is not supported for reductions\n";
+            return;
         }
-        case Op::VredminuVS:
-            value = std::min(value, element);
-            break;
 
-        case Op::VredmaxuVS:
-            value = std::max(value, element);
-            break;
-        default:
-            break;
-    }
-}
+        uint64_t value =
+            registers_.ReadVectorElement(vs1, sew_bytes, 0);
 
-    // Write only element 0 of the destination.
-    for (size_t k = 0; k < sew_bytes; ++k)
-    {
-        new_vd[k] = static_cast<uint8_t>((value >> (8 * k)) & 0xFF);
-    }
-}
-else
-{
-    for (uint64_t i = 0; i < vl; ++i)
-    {
-        uint64_t value = 0;
-
-if (op == Op::VmvVX || op == Op::VmvVI)
-{
-    value = splat;
-}
-else
-{
-    const uint64_t lhs = registers_.ReadVectorElement(vs2, sew_bytes, i);
-
-    if (op == Op::VaddVX || op == Op::VsubVX ||
-    op == Op::VrsubVX || op == Op::VmulVX ||
-    op == Op::VandVX || op == Op::VorVX ||
-    op == Op::VxorVX)
-    {
-        const uint64_t scalar = registers_.ReadGpr(vs1);
-
-        switch (op)
+        for (uint64_t i = 0; i < vl; ++i)
         {
-            case Op::VaddVX:  value = lhs + scalar; break;
-            case Op::VsubVX:  value = lhs - scalar; break;
-            case Op::VrsubVX: value = scalar - lhs; break;
-            case Op::VmulVX:  value = lhs * scalar; break;
-            case Op::VandVX: value = lhs & scalar; break;
-            case Op::VorVX:  value = lhs | scalar; break;
-            case Op::VxorVX: value = lhs ^ scalar; break;
-            default: break;
+            const uint64_t element =
+                registers_.ReadVectorElement(vs2, sew_bytes, i);
+
+            switch (op)
+            {
+            case Op::VredsumVS:
+                value += element;
+                break;
+
+            case Op::VredandVS:
+                value &= element;
+                break;
+
+            case Op::VredorVS:
+                value |= element;
+                break;
+
+            case Op::VredxorVS:
+                value ^= element;
+                break;
+
+            case Op::VredminVS:
+            case Op::VredmaxVS:
+            {
+                const unsigned sew_bits = sew_bytes * 8;
+                const uint64_t sign_bit = uint64_t{1} << (sew_bits - 1);
+
+                const int64_t signed_value =
+                    static_cast<int64_t>((value ^ sign_bit) - sign_bit);
+                const int64_t signed_element =
+                    static_cast<int64_t>((element ^ sign_bit) - sign_bit);
+
+                if (op == Op::VredminVS && signed_value > signed_element)
+                    value = element;
+
+                if (op == Op::VredmaxVS && signed_value < signed_element)
+                    value = element;
+
+                break;
+            }
+
+            case Op::VredminuVS:
+                value = std::min(value, element);
+                break;
+
+            case Op::VredmaxuVS:
+                value = std::max(value, element);
+                break;
+
+            default:
+                break;
+            }
+        }
+
+        for (size_t k = 0; k < sew_bytes; ++k)
+            new_vd[k] = static_cast<uint8_t>((value >> (8 * k)) & 0xFF);
+    }
+    else if (isComparison)
+    {
+        const uint64_t sign_bit =
+            uint64_t{1} << (sew_bytes * 8 - 1);
+
+        for (uint64_t i = 0; i < vl; ++i)
+        {
+            const uint64_t lhs =
+                registers_.ReadVectorElement(vs2, sew_bytes, i);
+            const uint64_t rhs =
+                registers_.ReadVectorElement(vs1, sew_bytes, i);
+
+            bool result = false;
+
+            switch (op)
+            {
+            case Op::VmseqVV:
+                result = (lhs == rhs);
+                break;
+
+            case Op::VmsneVV:
+                result = (lhs != rhs);
+                break;
+
+            case Op::VmsltVV:
+                result = ((lhs ^ sign_bit) < (rhs ^ sign_bit));
+                break;
+
+            case Op::VmsltuVV:
+                result = (lhs < rhs);
+                break;
+
+            case Op::VmsleVV:
+                result = ((lhs ^ sign_bit) <= (rhs ^ sign_bit));
+                break;
+
+            case Op::VmsleuVV:
+                result = (lhs <= rhs);
+                break;
+
+            default:
+                break;
+            }
+
+            const size_t byte_index = i / 8;
+            const uint8_t bit_mask = uint8_t{1} << (i % 8);
+
+            if (result)
+                new_vd[byte_index] |= bit_mask;
+            else
+                new_vd[byte_index] &= static_cast<uint8_t>(~bit_mask);
+        }
+    }
+    else if (op == Op::VfaddVV || op == Op::VfsubVV || op == Op::VfmulVV || op == Op::VfdivVV)
+    {
+        uint8_t rm = registers_.ReadCsr(0x002); // frm
+
+        for (uint64_t i = 0; i < vl; ++i)
+        {
+            const uint32_t lhs = static_cast<uint32_t>(
+                registers_.ReadVectorElement(vs2, 4, i));
+            const uint32_t rhs = static_cast<uint32_t>(
+                registers_.ReadVectorElement(vs1, 4, i));
+
+            const auto [result, fflags] =
+                alu::Alu::fpexecute(
+                    op == Op::VfaddVV ? alu::AluOp::FADD_S :
+                    op == Op::VfsubVV ? alu::AluOp::FSUB_S :
+                    op == Op::VfmulVV ? alu::AluOp::FMUL_S :
+                    alu::AluOp::FDIV_S,
+                    lhs, rhs, 0, rm);
+
+            const uint32_t value = static_cast<uint32_t>(result);
+
+            for (size_t k = 0; k < 4; ++k)
+                new_vd[i * 4 + k] =
+                    static_cast<uint8_t>((value >> (8 * k)) & 0xFF);
+
+            // Accumulate FP exception flags (fflags, CSR 0x001).
+            const uint8_t old_fflags = registers_.ReadCsr(0x001);
+            registers_.WriteCsr(0x001, old_fflags | fflags);
         }
     }
     else
     {
-        const uint64_t rhs = registers_.ReadVectorElement(vs1, sew_bytes, i);
-
-        switch (op)
+        for (uint64_t i = 0; i < vl; ++i)
         {
-            case Op::VaddVV: value = lhs + rhs; break;
-            case Op::VsubVV: value = lhs - rhs; break;
-            case Op::VmulVV: value = lhs * rhs; break;
-            case Op::VandVV: value = lhs & rhs; break;
-            case Op::VorVV:  value = lhs | rhs; break;
-            case Op::VxorVV: value = lhs ^ rhs; break;
-            default:
-                std::cerr << "Invalid vector arithmetic operation\n";
-                return;
+            uint64_t value = 0;
+
+            if (op == Op::VmvVX || op == Op::VmvVI)
+            {
+                value = splat;
+            }
+            else
+            {
+                const uint64_t lhs =
+                    registers_.ReadVectorElement(vs2, sew_bytes, i);
+
+                if (op == Op::VaddVX || op == Op::VsubVX ||
+                    op == Op::VrsubVX || op == Op::VmulVX ||
+                    op == Op::VandVX || op == Op::VorVX ||
+                    op == Op::VxorVX)
+                {
+                    const uint64_t scalar = registers_.ReadGpr(vs1);
+
+                    switch (op)
+                    {
+                    case Op::VaddVX:  value = lhs + scalar; break;
+                    case Op::VsubVX:  value = lhs - scalar; break;
+                    case Op::VrsubVX: value = scalar - lhs; break;
+                    case Op::VmulVX:  value = lhs * scalar; break;
+                    case Op::VandVX:  value = lhs & scalar; break;
+                    case Op::VorVX:   value = lhs | scalar; break;
+                    case Op::VxorVX:  value = lhs ^ scalar; break;
+                    default: break;
+                    }
+                }
+                else
+                {
+                    const uint64_t rhs =
+                        registers_.ReadVectorElement(vs1, sew_bytes, i);
+
+                    switch (op)
+                    {
+                    case Op::VaddVV: value = lhs + rhs; break;
+                    case Op::VsubVV: value = lhs - rhs; break;
+                    case Op::VmulVV: value = lhs * rhs; break;
+                    case Op::VandVV: value = lhs & rhs; break;
+                    case Op::VorVV:  value = lhs | rhs; break;
+                    case Op::VxorVV: value = lhs ^ rhs; break;
+
+                    case Op::VminVV:
+                    {
+                        const uint64_t sign_bit =
+                            uint64_t{1} << (sew_bytes * 8 - 1);
+                        value = ((lhs ^ sign_bit) < (rhs ^ sign_bit))
+                                    ? lhs : rhs;
+                        break;
+                    }
+
+                    case Op::VmaxVV:
+                    {
+                        const uint64_t sign_bit =
+                            uint64_t{1} << (sew_bytes * 8 - 1);
+                        value = ((lhs ^ sign_bit) > (rhs ^ sign_bit))
+                                    ? lhs : rhs;
+                        break;
+                    }
+
+                    case Op::VminuVV:
+                        value = (lhs < rhs) ? lhs : rhs;
+                        break;
+
+                    case Op::VmaxuVV:
+                        value = (lhs > rhs) ? lhs : rhs;
+                        break;
+
+                    default:
+                        std::cerr << "Invalid vector arithmetic operation\n";
+                        return;
+                    }
+                }
+            }
+
+            for (size_t k = 0; k < sew_bytes; ++k)
+                new_vd[i * sew_bytes + k] =
+                    static_cast<uint8_t>((value >> (8 * k)) & 0xFF);
         }
     }
-}
-        for (size_t k = 0; k < sew_bytes; ++k)
-            new_vd[i * sew_bytes + k] = static_cast<uint8_t>((value >> (8 * k)) & 0xFF);
-    }
-}
+
     if (old_vd != new_vd)
     {
-        registers_.WriteVreg(vd, new_vd);              // single write, single UI refresh
+        registers_.WriteVreg(vd, new_vd); // single write, single UI refresh
         current_delta_.register_changes.push_back({vd, 3, 0, 0, old_vd, new_vd});
     }
 }
@@ -1554,8 +1693,8 @@ void RVSSProcessor::DebugRun()
             SetActiveWireNames();
             emit updateCircuitStateSignal(active_wires_);
 
-            //unsigned int delay_ms = vm_config::config.getRunStepDelay();
-            // std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+            // unsigned int delay_ms = vm_config::config.getRunStepDelay();
+            //  std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         }
         else
         {
@@ -1617,7 +1756,6 @@ void RVSSProcessor::Step()
     }
     DumpRegisters(globals::registers_dump_file_path, registers_);
     DumpState(globals::vm_state_dump_file_path);
-
 }
 
 bool RVSSProcessor::StepAndNotify()
@@ -1633,8 +1771,7 @@ bool RVSSProcessor::StepAndNotify()
     setProcessorState();
     emit processorClockedSignal(processor_state_);
     emit updateCircuitStateSignal(active_wires_);
-    active_wires_.erase(active_wires_.begin() + always_active_wires_count_,
-                        active_wires_.end());
+    active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
     // clear active wires after emitting signal except always active wires
     return program_counter_ < program_size_;
 }
@@ -1672,10 +1809,10 @@ void RVSSProcessor::Undo()
             break;
         }
         case 3:
-{ // VECTOR
-    registers_.WriteVreg(change.reg_index, change.old_vector);
-    break;
-}
+        { // VECTOR
+            registers_.WriteVreg(change.reg_index, change.old_vector);
+            break;
+        }
         default:
             std::cerr << "Invalid register type: " << change.reg_type << std::endl;
             break;
@@ -1749,10 +1886,10 @@ void RVSSProcessor::Redo()
             break;
         }
         case 3:
-{ // VECTOR
-    registers_.WriteVreg(change.reg_index, change.new_vector);
-    break;
-}
+        { // VECTOR
+            registers_.WriteVreg(change.reg_index, change.new_vector);
+            break;
+        }
         default:
             std::cerr << "Invalid register type: " << change.reg_type << std::endl;
             break;
@@ -1807,4 +1944,4 @@ void RVSSProcessor::Reset()
     undo_stack_ = std::stack<StepDelta>();
     redo_stack_ = std::stack<StepDelta>();
 }
-}//namespaace Kites
+} // namespace Kites

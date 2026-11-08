@@ -1,0 +1,56 @@
+KITE_RVV – My RVV Instruction Contributions
+=============================================
+
+This file documents the RVV instructions I personally implemented and tested,
+excluding vfadd.vv and vfsub.vv, which I have documented separately.
+
+1. Floating-point vector arithmetic
+-----------------------------------
+- vfmul.vv – vector-vector floating-point multiplication
+- vfdiv.vv – vector-vector floating-point division
+
+2. Integer vector minimum and maximum
+-------------------------------------
+- vmin.vv  – signed element-wise minimum
+- vmax.vv  – signed element-wise maximum
+- vminu.vv – unsigned element-wise minimum
+- vmaxu.vv – unsigned element-wise maximum
+
+3. Vector comparison instructions
+---------------------------------
+- vmseq.vv  – vector elements equal
+- vmsne.vv  – vector elements not equal
+- vmslt.vv  – signed vector less-than
+- vmsltu.vv – unsigned vector less-than
+- vmsle.vv  – signed vector less-than-or-equal
+- vmsleu.vv – unsigned vector less-than-or-equal
+
+4. Validation and testing
+-------------------------
+- Created and ran assembly tests for the implemented instructions.
+- Tested signed and unsigned comparisons with values that distinguish
+  signed results from unsigned results.
+- Corrected the funct6 encoding mappings in the assembler and processor
+  decoder for vmslt.vv, vmsltu.vv, vmsle.vv, and vmsleu.vv.
+- Rebuilt the project and verified the signed/unsigned comparison test.
+- Expected comparison mask bytes for the discriminating test:
+  vmslt.vv  = 05
+  vmsltu.vv = 00
+  vmsle.vv  = 0F
+  vmsleu.vv = 0A
+
+Files involved
+--------------
+- src/assembler/code_generator.cpp
+- src/common/instructions.cpp
+- src/processor/rvss/rvss_processor.cpp
+- Assembly test files under examples/
+
+Notes
+-----
+- This document lists only my contributions.
+- It does not claim teammate implementations such as vadd.vv, vsub.vv,
+  vmul.vv, vand.vv, vor.vv, vxor.vv, vsetvli, vmv.v.i, vmv.v.x,
+  vle32.v, or vse32.v.
+- vfadd.vv and vfsub.vv are intentionally not repeated here because
+  they are documented separately.

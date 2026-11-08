@@ -8,8 +8,8 @@
 #include "code_generator.h"
 #include "common/instructions.h"
 
-#include "processor/registers.h"
 #include "common/vector_defs.h"
+#include "processor/registers.h"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -362,62 +362,47 @@ uint32_t generateFDSTypeMachineCode(const ICUnit &block)
 
 uint32_t generateVSetVliMachineCode(const ICUnit &block)
 {
-    const uint32_t rd =
-    static_cast<uint32_t>(std::stoi(block.getRd().substr(1)));
+    const uint32_t rd = static_cast<uint32_t>(std::stoi(block.getRd().substr(1)));
 
-const uint32_t rs1 =
-    static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
+    const uint32_t rs1 = static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
 
-    const uint32_t zimm =
-        static_cast<uint32_t>(std::stoul(block.getImm(), nullptr, 0));
+    const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm(), nullptr, 0));
 
     if (rd > 31 || rs1 > 31 || zimm > 0x7FF)
         throw std::runtime_error("Invalid vsetvli operands");
 
-
-    return (zimm << 20)
-         | (rs1 << 15)
-         | (0b111 << 12)
-         | (rd << 7)
-         | 0b1010111;
+    return (zimm << 20) | (rs1 << 15) | (0b111 << 12) | (rd << 7) | 0b1010111;
 }
-uint32_t generateVectorVVMachineCode(
-    const ICUnit &block, uint32_t funct6, uint32_t funct3)
+uint32_t generateVectorVVMachineCode(const ICUnit &block, uint32_t funct6, uint32_t funct3)
 {
-    const uint32_t vd  = VectorRegisterIndex(block.getRd());
+    const uint32_t vd = VectorRegisterIndex(block.getRd());
     const uint32_t vs2 = VectorRegisterIndex(block.getRs1());
     const uint32_t vs1 = VectorRegisterIndex(block.getRs2());
 
-    return (funct6 << 26)
-         | (1u << 25)
-         | (vs2 << 20)
-         | (vs1 << 15)
-         | (funct3 << 12)
-         | (vd << 7)
-         | 0b1010111u;
+    return (funct6 << 26) | (1u << 25) | (vs2 << 20) | (vs1 << 15) | (funct3 << 12) | (vd << 7) |
+           0b1010111u;
 }
 uint32_t generateVmvVIMachineCode(const ICUnit &block)
 {
-    const uint32_t vd    = VectorRegisterIndex(block.getRd());
-    const int      imm   = std::stoi(block.getImm());
+    const uint32_t vd = VectorRegisterIndex(block.getRd());
+    const int imm = std::stoi(block.getImm());
     const uint32_t simm5 = static_cast<uint32_t>(imm) & 0x1F;
-    return (0b010111u << 26) | (1u << 25) | (0u << 20) | (simm5 << 15) |
-           (0b011u << 12) | (vd << 7) | 0b1010111u;
+    return (0b010111u << 26) | (1u << 25) | (0u << 20) | (simm5 << 15) | (0b011u << 12) |
+           (vd << 7) | 0b1010111u;
 }
 
 uint32_t generateVmvVXMachineCode(const ICUnit &block)
 {
-    const uint32_t vd  = VectorRegisterIndex(block.getRd());
+    const uint32_t vd = VectorRegisterIndex(block.getRd());
     const uint32_t rs1 = static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
-    return (0b010111u << 26) | (1u << 25) | (0u << 20) | (rs1 << 15) |
-           (0b100u << 12) | (vd << 7) | 0b1010111u;
+    return (0b010111u << 26) | (1u << 25) | (0u << 20) | (rs1 << 15) | (0b100u << 12) | (vd << 7) |
+           0b1010111u;
 }
 
 uint32_t generateVectorMemoryMachineCode(const ICUnit &block, bool is_store)
 {
     const uint32_t vreg = VectorRegisterIndex(block.getRd());
-    const uint32_t rs1 =
-        static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
+    const uint32_t rs1 = static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
 
     if (rs1 > 31)
         throw std::runtime_error("Invalid vector memory base register");
@@ -426,10 +411,10 @@ uint32_t generateVectorMemoryMachineCode(const ICUnit &block, bool is_store)
 
     // Unit-stride, unmasked, single-field, 32-bit element.
     return (1u << 25)       // vm = 1
-         | (rs1 << 15)      // Base GPR
-         | (0b110u << 12)   // width = 32-bit
-         | (vreg << 7)      // vd / vs3
-         | opcode;
+           | (rs1 << 15)    // Base GPR
+           | (0b110u << 12) // width = 32-bit
+           | (vreg << 7)    // vd / vs3
+           | opcode;
 }
 uint32_t generateVectorVXMachineCode(
     const ICUnit &block, uint32_t funct6)
@@ -458,76 +443,104 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
     {
         const ICUnit &block = pair.first;
         uint32_t code;
-        if (block.getOpcode() == "vsetvli")
-{
-    code = generateVSetVliMachineCode(block);
-}
-else if (block.getOpcode() == "vadd.vv")
-    code = generateVectorVVMachineCode(block, 0b000000, 0b000);
-else if (block.getOpcode() == "vredsum.vs")
-    code = generateVectorVVMachineCode(block, 0b000000, 0b010);
-    else if (block.getOpcode() == "vredand.vs")
-    code = generateVectorVVMachineCode(block, 0b000001, 0b010);
+               if (block.getOpcode() == "vsetvli")
+            code = generateVSetVliMachineCode(block);
 
-else if (block.getOpcode() == "vredor.vs")
-    code = generateVectorVVMachineCode(block, 0b000010, 0b010);
+        else if (block.getOpcode() == "vadd.vv")
+            code = generateVectorVVMachineCode(block, 0b000000, 0b000);
 
-else if (block.getOpcode() == "vredxor.vs")
-    code = generateVectorVVMachineCode(block, 0b000011, 0b010);
-    else if (block.getOpcode() == "vredminu.vs")
-    code = generateVectorVVMachineCode(block, 0b000100, 0b010);
+        // Vector reductions
+        else if (block.getOpcode() == "vredsum.vs")
+            code = generateVectorVVMachineCode(block, 0b000000, 0b010);
+        else if (block.getOpcode() == "vredand.vs")
+            code = generateVectorVVMachineCode(block, 0b000001, 0b010);
+        else if (block.getOpcode() == "vredor.vs")
+            code = generateVectorVVMachineCode(block, 0b000010, 0b010);
+        else if (block.getOpcode() == "vredxor.vs")
+            code = generateVectorVVMachineCode(block, 0b000011, 0b010);
+        else if (block.getOpcode() == "vredminu.vs")
+            code = generateVectorVVMachineCode(block, 0b000100, 0b010);
+        else if (block.getOpcode() == "vredmin.vs")
+            code = generateVectorVVMachineCode(block, 0b000101, 0b010);
+        else if (block.getOpcode() == "vredmaxu.vs")
+            code = generateVectorVVMachineCode(block, 0b000110, 0b010);
+        else if (block.getOpcode() == "vredmax.vs")
+            code = generateVectorVVMachineCode(block, 0b000111, 0b010);
 
-else if (block.getOpcode() == "vredmin.vs")
-    code = generateVectorVVMachineCode(block, 0b000101, 0b010);
+        // Floating-point vector operations
+        else if (block.getOpcode() == "vfadd.vv")
+            code = generateVectorVVMachineCode(block, 0b000000, 0b001);
+        else if (block.getOpcode() == "vfsub.vv")
+            code = generateVectorVVMachineCode(block, 0b000010, 0b001);
+        else if (block.getOpcode() == "vfmul.vv")
+            code = generateVectorVVMachineCode(block, 0b100100, 0b001);
+        else if (block.getOpcode() == "vfdiv.vv")
+            code = generateVectorVVMachineCode(block, 0b100000, 0b001);
 
-else if (block.getOpcode() == "vredmaxu.vs")
-    code = generateVectorVVMachineCode(block, 0b000110, 0b010);
+        // Integer min/max
+        else if (block.getOpcode() == "vmin.vv")
+            code = generateVectorVVMachineCode(block, 0b000101, 0b000);
+        else if (block.getOpcode() == "vmax.vv")
+            code = generateVectorVVMachineCode(block, 0b000111, 0b000);
+        else if (block.getOpcode() == "vminu.vv")
+            code = generateVectorVVMachineCode(block, 0b000100, 0b000);
+        else if (block.getOpcode() == "vmaxu.vv")
+            code = generateVectorVVMachineCode(block, 0b000110, 0b000);
 
-else if (block.getOpcode() == "vredmax.vs")
-    code = generateVectorVVMachineCode(block, 0b000111, 0b010);
-else if (block.getOpcode() == "vsub.vv")
-    code = generateVectorVVMachineCode(block, 0b000010, 0b000);
+        else if (block.getOpcode() == "vsub.vv")
+            code = generateVectorVVMachineCode(block, 0b000010, 0b000);
+        else if (block.getOpcode() == "vmul.vv")
+            code = generateVectorVVMachineCode(block, 0b100101, 0b010);
 
-else if (block.getOpcode() == "vmul.vv")
-    code = generateVectorVVMachineCode(block, 0b100101, 0b010);
+        // Vector bitwise operations
+        else if (block.getOpcode() == "vand.vv")
+            code = generateVectorVVMachineCode(block, 0b001001, 0b000);
+        else if (block.getOpcode() == "vor.vv")
+            code = generateVectorVVMachineCode(block, 0b001010, 0b000);
+        else if (block.getOpcode() == "vxor.vv")
+            code = generateVectorVVMachineCode(block, 0b001011, 0b000);
 
-else if (block.getOpcode() == "vand.vv")
-    code = generateVectorVVMachineCode(block, 0b001001, 0b000);
+        // Vector comparisons
+        else if (block.getOpcode() == "vmseq.vv")
+            code = generateVectorVVMachineCode(block, 0b011000, 0b000);
+        else if (block.getOpcode() == "vmsne.vv")
+            code = generateVectorVVMachineCode(block, 0b011001, 0b000);
+        else if (block.getOpcode() == "vmsltu.vv")
+            code = generateVectorVVMachineCode(block, 0b011010, 0b000);
+        else if (block.getOpcode() == "vmslt.vv")
+            code = generateVectorVVMachineCode(block, 0b011011, 0b000);
+        else if (block.getOpcode() == "vmsleu.vv")
+            code = generateVectorVVMachineCode(block, 0b011100, 0b000);
+        else if (block.getOpcode() == "vmsle.vv")
+            code = generateVectorVVMachineCode(block, 0b011101, 0b000);
 
-else if (block.getOpcode() == "vor.vv")
-    code = generateVectorVVMachineCode(block, 0b001010, 0b000);
+        // Scalar .vx operations
+        else if (block.getOpcode() == "vadd.vx")
+            code = generateVectorVXMachineCode(block, 0b000000);
+        else if (block.getOpcode() == "vsub.vx")
+            code = generateVectorVXMachineCode(block, 0b000010);
+        else if (block.getOpcode() == "vrsub.vx")
+            code = generateVectorVXMachineCode(block, 0b000011);
+        else if (block.getOpcode() == "vmul.vx")
+            code = generateVectorVXMachineCode(block, 0b100101);
+        else if (block.getOpcode() == "vand.vx")
+            code = generateVectorVXMachineCode(block, 0b001001);
+        else if (block.getOpcode() == "vor.vx")
+            code = generateVectorVXMachineCode(block, 0b001010);
+        else if (block.getOpcode() == "vxor.vx")
+            code = generateVectorVXMachineCode(block, 0b001011);
 
-else if (block.getOpcode() == "vxor.vv")
-    code = generateVectorVVMachineCode(block, 0b001011, 0b000);
-    else if (block.getOpcode() == "vadd.vx")
-    code = generateVectorVXMachineCode(block, 0b000000);
+        else if (block.getOpcode() == "vmv.v.i")
+            code = generateVmvVIMachineCode(block);
+        else if (block.getOpcode() == "vmv.v.x")
+            code = generateVmvVXMachineCode(block);
 
-else if (block.getOpcode() == "vsub.vx")
-    code = generateVectorVXMachineCode(block, 0b000010);
-
-else if (block.getOpcode() == "vrsub.vx")
-    code = generateVectorVXMachineCode(block, 0b000011);
-
-else if (block.getOpcode() == "vmul.vx")
-    code = generateVectorVXMachineCode(block, 0b100101);
-else if (block.getOpcode() == "vmv.v.i")
-    code = generateVmvVIMachineCode(block);
-else if (block.getOpcode() == "vmv.v.x")
-    code = generateVmvVXMachineCode(block);
-    else if (block.getOpcode() == "vand.vx")
-    code = generateVectorVXMachineCode(block, 0b001001);
-
-else if (block.getOpcode() == "vor.vx")
-    code = generateVectorVXMachineCode(block, 0b001010);
-
-else if (block.getOpcode() == "vxor.vx")
-    code = generateVectorVXMachineCode(block, 0b001011);
-    else if (block.getOpcode() == "vle32.v")
-    code = generateVectorMemoryMachineCode(block, false);
-
-else if (block.getOpcode() == "vse32.v")
-    code = generateVectorMemoryMachineCode(block, true);
-else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
+        else if (block.getOpcode() == "vle32.v")
+            code = generateVectorMemoryMachineCode(block, false);
+        else if (block.getOpcode() == "vse32.v")
+            code = generateVectorMemoryMachineCode(block, true);
+        
+        else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
         {
             code = generateRTypeMachineCode(block);
         }
@@ -603,4 +616,4 @@ else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
     }
     return machine_code;
 }
-}// namespace Kites
+} // namespace Kites

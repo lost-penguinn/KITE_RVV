@@ -376,20 +376,32 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
+
+    // RVV integer vector instructions
     "vadd.vv", "vsub.vv", "vmul.vv",
-"vand.vv", "vor.vv", "vxor.vv",
-"vadd.vx", "vsub.vx", "vrsub.vx", "vmul.vx",
-"vsetvli", "vmv.v.i", "vmv.v.x",
-"vle32.v", "vse32.v",
-"vand.vx", "vor.vx", "vxor.vx",
-"vredsum.vs",
-"vredand.vs",
-"vredor.vs",
-"vredxor.vs",
-"vredmin.vs",
-"vredmax.vs",
-"vredminu.vs",
-"vredmaxu.vs",
+    "vand.vv", "vor.vv", "vxor.vv",
+
+    // Scalar .vx instructions
+    "vadd.vx", "vsub.vx", "vrsub.vx", "vmul.vx",
+    "vand.vx", "vor.vx", "vxor.vx",
+
+    // Vector configuration, moves and memory
+    "vsetvli", "vmv.v.i", "vmv.v.x",
+    "vle32.v", "vse32.v",
+
+    // Reductions
+    "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs",
+    "vredmin.vs", "vredmax.vs", "vredminu.vs", "vredmaxu.vs",
+
+    // Min/max
+    "vmin.vv", "vmax.vv", "vminu.vv", "vmaxu.vv",
+
+    // Comparisons
+    "vmseq.vv", "vmsne.vv", "vmslt.vv", "vmsltu.vv",
+    "vmsle.vv", "vmsleu.vv",
+
+    // Floating-point
+    "vfadd.vv", "vfsub.vv", "vfmul.vv", "vfdiv.vv",
 };
 
 static const std::unordered_set<std::string> RTypeInstructions = {
@@ -478,7 +490,7 @@ static const std::unordered_set<std::string> MExtensionInstructions = {
     "mul",  "mulh", "mulhsu", "mulhu", "div",  "divu", "rem",
     "remu", "mulw", "divw",   "divuw", "remw", "remuw"};
 
-//====================================================================================
+
 static const std::unordered_set<std::string> FDExtensionRTypeInstructions = {
     "fsgnj.s", "fsgnjn.s", "fsgnjx.s", "fmin.s", "fmax.s", "feq.s", "flt.s", "fle.s",
     "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "feq.d", "flt.d", "fle.d",
@@ -979,33 +991,59 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"fmv.d.x", {SyntaxType::O_FPR_C_GPR}}, // f[n][0:63] to x[m][0:63], 64-bit floating-point value
                                             // from an x (integer) register into an f
                                             // (floating-point) register without conversion
+    ///////////////////////////////////////////////////////////////////////////////////////
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_I}},
     {"vmv.v.i", {SyntaxType::O_VEC_C_I}},
     {"vmv.v.x", {SyntaxType::O_VEC_C_GPR}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vand.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vor.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vxor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vadd.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vsub.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vrsub.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vmul.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vle32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
-{"vse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
-{"vand.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vor.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vxor.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
-{"vredsum.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredand.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredor.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredxor.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredmin.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredmax.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredminu.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
-{"vredmaxu.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vand.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vor.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vxor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
 
+    // Scalar .vx instructions
+    {"vadd.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vsub.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vrsub.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vmul.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vand.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vor.vx",   {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vxor.vx",  {SyntaxType::O_VEC_C_VEC_C_GPR}},
+
+    // Vector memory
+    {"vle32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+
+    // Reductions
+    {"vredsum.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredand.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredor.vs",   {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredxor.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredmin.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredmax.vs",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredminu.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredmaxu.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+
+    // Integer min/max
+    {"vmin.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmax.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vminu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmaxu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+
+    // Vector comparisons
+    {"vmseq.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmsne.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmslt.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmsltu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmsle.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmsleu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+
+    // Floating-point vector operations
+    {"vfadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfdiv.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
 };
 
 bool isValidInstruction(const std::string &instruction)

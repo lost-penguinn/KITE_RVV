@@ -1,0 +1,103 @@
+KITE_RVV / Kites — Vector FP32 vfadd.vv and vfsub.vv implementation notes
+
+Purpose
+
+This document records the source-file changes made while implementing
+and testing unmasked vector FP32 addition (vfadd.vv) and subtraction
+(vfsub.vv).
+
+Project paths below are relative to the project root unless otherwise
+stated.
+
+1. src/processor/rvss/rvss_processor.cpp
+
+Inside RVSSProcessor::ExecuteVector():
+
+A)  Added operations to the local Op enum: VfaddVV, VfsubVV
+
+B)  Added decode cases for opcode 0x57, funct3=001: vfadd.vv: funct6 =
+    000000 vfsub.vv: funct6 = 000010
+
+Both are unmasked vector-vector FP instructions (vm=1).
+
+C)  Added FP32 SEW validation: Both VfaddVV and VfsubVV require SEW=32.
+    LMUL=1 and legal VTYPE checks remain in place.
+
+D)  Added/extended the floating-point execution branch: The branch
+    handles either VfaddVV or VfsubVV. For each lane up to VL:
+
+    -   Read vs2 and vs1 elements as 32-bit FP bit patterns.
+    -   Read frm from CSR 0x002.
+    -   Call alu::Alu::fpexecute with: FADD_S for vfadd.vv FSUB_S for
+        vfsub.vv
+    -   Write the 32-bit result into the destination vector lane.
+    -   OR the returned exception flags into fflags (CSR 0x001).
+
+E)  Existing integer vector execution loop remains unchanged.
+    Destination lanes beyond VL retain their previous values.
+
+2. src/common/instructions.cpp
+
+A)  Added instruction mnemonic entries: “vfadd.vv” “vfsub.vv”
+
+B)  Added syntax-map entries for both mnemonics: {“vfadd.vv”,
+    {SyntaxType::O_VEC_C_VEC_C_VEC}}, {“vfsub.vv”,
+    {SyntaxType::O_VEC_C_VEC_C_VEC}},
+
+The vector-vector syntax is: vd, vs2, vs1.
+
+3. src/assembler/code_generator.cpp
+
+A)  Added/used vector-vector machine-code generation for vfadd.vv:
+    generateVectorVVMachineCode(block, 0b000000, 0b001)
+
+B)  Added vector-vector machine-code generation for vfsub.vv:
+    generateVectorVVMachineCode(block, 0b000010, 0b001)
+
+The shared helper generateVectorVVMachineCode() encodes the vector
+operands and opcode fields.
+
+4. src/assembler/parse_formats/vector_formats.cpp
+
+No change was needed for vfsub.vv.
+
+The existing parse_O_VEC_C_VEC_C_VEC() parser already handles three
+vector register operands generically: vd, vs2, vs1
+
+It stores the opcode and operands in the intermediate instruction
+representation.
+
+5. Other assembler parser files
+
+No additional parser change was required once the mnemonic list and
+syntax map were registered. The existing parser dispatches this syntax
+type to the generic vector-vector parser.
+
+Testing
+
+vfadd.vv test: Array A: [55.5, 10.0, -8.0, 100.0] Array B: [45.9, 2.5,
+3.0, 0.5] Expected results: [101.4, 12.5, -5.0, 100.5]
+
+vfsub.vv test: Same input arrays, subtract B from A. Expected FP32
+results: Lane 0: approximately 9.6 Lane 1: 7.5 Lane 2: -11.0 Lane 3:
+99.5
+
+An additional exact-representable vfsub.vv test used: A = [12.5, -6.0,
+1.5, 100.0] B = [3.25, 2.0, 0.5, 25.0] Results = [9.25, -8.0, 1.0, 75.0]
+
+The memory output was confirmed to match: 0x41140000 (9.25) 0xC1000000
+(-8.0) 0x3F800000 (1.0) 0x42960000 (75.0)
+
+Memory stores are little-endian, so FP32 values appear as their four
+bytes in reverse byte order in the memory viewer.
+
+Build command used: cmake –build build -j$(nproc)
+
+Notes
+
+-   The implementation supports unmasked vector-vector FP32 operations
+    only.
+-   SEW must be 32 and LMUL must be 1 for these operations.
+-   Masked vector operations and other SEW/LMUL configurations are not
+    covered by these tests.
+-   The vfadd.vv and vfsub.vv results were tested in the Kites GUI.
