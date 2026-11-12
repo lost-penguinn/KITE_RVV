@@ -402,6 +402,8 @@ static const std::unordered_set<std::string> valid_instructions = {
 
     // Floating-point
     "vfadd.vv", "vfsub.vv", "vfmul.vv", "vfdiv.vv",
+    "vfmin.vv", "vfmax.vv",
+    "vfsgnj.vv", "vfsgnjn.vv", "vfsgnjx.vv",
 };
 
 static const std::unordered_set<std::string> RTypeInstructions = {
@@ -1044,6 +1046,11 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vfsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vfmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vfdiv.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfmin.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfmax.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfsgnj.vv",  {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfsgnjn.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfsgnjx.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
 };
 
 bool isValidInstruction(const std::string &instruction)

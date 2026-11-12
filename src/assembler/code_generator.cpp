@@ -476,6 +476,16 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
             code = generateVectorVVMachineCode(block, 0b100100, 0b001);
         else if (block.getOpcode() == "vfdiv.vv")
             code = generateVectorVVMachineCode(block, 0b100000, 0b001);
+        else if (block.getOpcode() == "vfmin.vv")
+            code = generateVectorVVMachineCode(block, 0b000100, 0b001);
+        else if (block.getOpcode() == "vfmax.vv")
+            code = generateVectorVVMachineCode(block, 0b000110, 0b001);
+        else if (block.getOpcode() == "vfsgnj.vv")
+            code = generateVectorVVMachineCode(block, 0b001000, 0b001);
+        else if (block.getOpcode() == "vfsgnjn.vv")
+            code = generateVectorVVMachineCode(block, 0b001001, 0b001);
+        else if (block.getOpcode() == "vfsgnjx.vv")
+            code = generateVectorVVMachineCode(block, 0b001010, 0b001);
 
         // Integer min/max
         else if (block.getOpcode() == "vmin.vv")

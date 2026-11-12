@@ -1,0 +1,38 @@
+KITE_RVV – Work Summary
+
+Work completed:
+
+1.  Added floating-point vector minimum and maximum instructions:
+    -   vfmin.vv
+    -   vfmax.vv
+2.  Added floating-point vector sign-injection instructions:
+    -   vfsgnj.vv
+    -   vfsgnjn.vv
+    -   vfsgnjx.vv
+
+How the instructions were implemented: - Added the instruction names to
+the instruction list and assembler syntax mapping. - Added their
+machine-code generation mappings in src/assembler/code_generator.cpp. -
+Added instruction enum entries and decoder cases in
+src/processor/rvss/rvss_processor.cpp. - Added SEW=32 validation and
+vector execution handling. - Reused the existing scalar ALU operations:
+FMIN_S and FMAX_S for vfmin.vv and vfmax.vv. FSGNJ_S, FSGNJN_S and
+FSGNJX_S for the three sign-injection instructions. - No changes were
+needed in alu.cpp or alu.h.
+
+Testing: - Tested vfmin.vv and vfmax.vv with ordinary positive and
+negative floating-point values. - Tested signed-zero behavior: vfmin
+selects -0.0 and vfmax selects +0.0 when comparing +0.0 and -0.0. -
+Tested quiet-NaN cases. - Tested vfsgnj.vv, vfsgnjn.vv and vfsgnjx.vv
+with positive and negative FP32 values, and checked the resulting
+vector-register bit patterns. - The tests produced the expected results.
+
+Other work discussed: - Inspected the existing scalar ALU support for
+FCLASS_S and FSQRT_S while considering vfclass.v and vfsqrt.v. - Decided
+to skip vfclass.v and vfsqrt.v for now; these were inspected but not
+implemented.
+
+Summary: Implemented and tested five additional FP32 vector
+instructions: vfmin.vv, vfmax.vv, vfsgnj.vv, vfsgnjn.vv and vfsgnjx.vv.
+The implementation reused existing scalar ALU operations and added the
+required assembler, encoding, decoding and vector execution support.

@@ -1,0 +1,56 @@
+IMPORTANT ADDITIONAL IMPLEMENTATION NOTES – KITE_RVV
+
+1. RVV COMPARISON INSTRUCTIONS PRODUCE PACKED MASK RESULTS
+   - vmseq.vv, vmsne.vv, vmslt.vv, vmsltu.vv, vmsle.vv, and vmsleu.vv produce packed mask bits.
+   - Each bit represents the comparison result of one vector element.
+   - They do not produce normal 32-bit integer values (0 or 1) per element.
+   - Do not use vse32.v to interpret comparison results as ordinary integer elements.
+
+2. SIGNED AND UNSIGNED COMPARISON LOGIC
+   - Signed comparisons use sign-bit transformation:
+       (lhs ^ sign_bit) < (rhs ^ sign_bit)
+   - Unsigned comparisons use direct comparison:
+       lhs < rhs
+   - The same distinction applies to less-than-or-equal comparisons.
+   - This correction was important for obtaining proper signed and unsigned comparison results.
+
+3. CORRECT RVV COMPARISON INSTRUCTION ENCODINGS
+   Instruction    funct6
+   vmseq.vv       011000
+   vmsne.vv       011001
+   vmsltu.vv      011010
+   vmslt.vv       011011
+   vmsleu.vv      011100
+   vmsle.vv       011101
+
+   A signed/unsigned encoding mix-up was identified and corrected during testing.
+
+4. VECTOR CONFIGURATION SYNTAX
+   - The working configuration for SEW=32 and LMUL=1 is:
+       vsetvli t3, zero, 208
+   - The assembler did not accept the textual e32,m1 configuration syntax in our tests.
+
+5. NEGATIVE INTEGER INITIALIZATION
+   - Use the following syntax to initialize a negative integer:
+       addi t4, zero, -18
+   - Avoid incorrect combinations of lui and negative addi when constructing negative values, as they can generate an unintended bit pattern.
+
+6. VECTOR REGISTER GUI DISPLAY
+   - The GUI displays the raw 128-bit vector register value in hexadecimal.
+   - Bytes are displayed in reverse visual order compared with the usual low-to-high element presentation.
+   - Interpret the low-order bits carefully when checking packed mask results.
+
+7. TESTING RESULTS
+   - All six vector comparison instructions passed the combined comparison test.
+   - Signed and unsigned vector minimum/maximum instructions passed their tests.
+   - Implemented and tested FP32 vector arithmetic instructions:
+       vfadd.vv
+       vfsub.vv
+       vfmul.vv
+       vfdiv.vv
+
+8. GIT REBASE AND PUSH
+   - Local changes were successfully rebased onto the latest remote vector-support branch.
+   - Conflicts in code_generator.cpp, instructions.cpp, and rvss_processor.cpp were resolved while retaining both personal and teammate implementations.
+   - The final commit was successfully pushed to origin/vector-support.
+   - Commit hash: 2c1640c

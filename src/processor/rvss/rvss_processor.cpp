@@ -1113,6 +1113,8 @@ void RVSSProcessor::ExecuteVector()
         VmsleVV, VmsleuVV,
 
         VfaddVV, VfsubVV, VfmulVV, VfdivVV,
+        VfminVV, VfmaxVV,
+        VfsgnjVV, VfsgnjnVV, VfsgnjxVV,
 
         VredsumVS, VredandVS, VredorVS, VredxorVS,
         VredminVS, VredmaxVS, VredminuVS, VredmaxuVS,
@@ -1151,6 +1153,11 @@ void RVSSProcessor::ExecuteVector()
         else if (funct6 == 0b000010) op = Op::VfsubVV;
         else if (funct6 == 0b100100) op = Op::VfmulVV;
         else if (funct6 == 0b100000) op = Op::VfdivVV;
+        else if (funct6 == 0b000100) op = Op::VfminVV;
+        else if (funct6 == 0b000110) op = Op::VfmaxVV;
+        else if (funct6 == 0b001000) op = Op::VfsgnjVV;
+        else if (funct6 == 0b001001) op = Op::VfsgnjnVV;
+        else if (funct6 == 0b001010) op = Op::VfsgnjxVV;
     }
     else if (opcode == 0x57 && funct3 == 0b010)
     {
@@ -1204,10 +1211,14 @@ void RVSSProcessor::ExecuteVector()
         std::cerr << "Only LMUL=1 is supported yet\n";
         return;
     }
-    if ((op == Op::VfaddVV || op == Op::VfsubVV || op == Op::VfmulVV || op == Op::VfdivVV ) &&
-    vec::sewBits(vtype.vsew) != 32)
+    if ((op == Op::VfaddVV || op == Op::VfsubVV ||
+        op == Op::VfmulVV || op == Op::VfdivVV ||
+        op == Op::VfminVV || op == Op::VfmaxVV ||
+        op == Op::VfsgnjVV || op == Op::VfsgnjnVV ||
+        op == Op::VfsgnjxVV) &&
+        vec::sewBits(vtype.vsew) != 32)
     {
-        std::cerr << "vfadd.vv and vfsub.vv currently support only SEW=32 (FP32)\n";
+        std::cerr << "Floating-point vector operations currently support only SEW=32 (FP32)\n";
         return;
     }
 
@@ -1365,7 +1376,11 @@ void RVSSProcessor::ExecuteVector()
                 new_vd[byte_index] &= static_cast<uint8_t>(~bit_mask);
         }
     }
-    else if (op == Op::VfaddVV || op == Op::VfsubVV || op == Op::VfmulVV || op == Op::VfdivVV)
+    else if (op == Op::VfaddVV || op == Op::VfsubVV ||
+        op == Op::VfmulVV || op == Op::VfdivVV ||
+        op == Op::VfminVV || op == Op::VfmaxVV ||
+        op == Op::VfsgnjVV || op == Op::VfsgnjnVV ||
+        op == Op::VfsgnjxVV)
     {
         uint8_t rm = registers_.ReadCsr(0x002); // frm
 
@@ -1381,7 +1396,12 @@ void RVSSProcessor::ExecuteVector()
                     op == Op::VfaddVV ? alu::AluOp::FADD_S :
                     op == Op::VfsubVV ? alu::AluOp::FSUB_S :
                     op == Op::VfmulVV ? alu::AluOp::FMUL_S :
-                    alu::AluOp::FDIV_S,
+                    op == Op::VfdivVV ? alu::AluOp::FDIV_S :
+                    op == Op::VfminVV ? alu::AluOp::FMIN_S :
+                    op == Op::VfmaxVV ? alu::AluOp::FMAX_S :
+                    op == Op::VfsgnjVV ? alu::AluOp::FSGNJ_S :
+                    op == Op::VfsgnjnVV ? alu::AluOp::FSGNJN_S :
+                    alu::AluOp::FSGNJX_S,
                     lhs, rhs, 0, rm);
 
             const uint32_t value = static_cast<uint32_t>(result);
