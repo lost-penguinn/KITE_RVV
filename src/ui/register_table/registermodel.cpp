@@ -157,19 +157,57 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
                 }
                 }
             }
-           else if (row < 64)
-{
-    return QString("");
-}
-else
+          else
 {
     auto bytes = m_currentRegisterFile->ReadVreg(row - 64);
 
-    QString value = "0x";
-    for (int i = static_cast<int>(bytes.size()) - 1; i >= 0; --i)
+    // Preserve the existing 128-bit hexadecimal representation.
+    if (m_displayBase == Base::Hexadecimal)
     {
-        value += QString("%1").arg(bytes[i], 2, 16, QChar('0')).toUpper();
+        QString value = "0x";
+
+        for (int i = static_cast<int>(bytes.size()) - 1; i >= 0; --i)
+        {
+            value += QString("%1")
+                         .arg(bytes[i], 2, 16, QChar('0'))
+                         .toUpper();
+        }
+
+        return value;
     }
+
+    // Display individual 32-bit vector elements.
+    QString value = "[";
+
+    const size_t elementCount = bytes.size() / 4;
+
+    for (size_t i = 0; i < elementCount; ++i)
+    {
+        uint32_t raw =
+            static_cast<uint32_t>(bytes[i * 4]) |
+            (static_cast<uint32_t>(bytes[i * 4 + 1]) << 8) |
+            (static_cast<uint32_t>(bytes[i * 4 + 2]) << 16) |
+            (static_cast<uint32_t>(bytes[i * 4 + 3]) << 24);
+
+        if (i > 0)
+            value += ", ";
+
+        switch (m_displayBase)
+        {
+        case Base::Decimal:
+            value += QString::number(static_cast<int32_t>(raw));
+            break;
+
+        case Base::Binary:
+            value += "0b" + QString::number(raw, 2).rightJustified(32, '0');
+            break;
+
+        case Base::Hexadecimal:
+            break;
+        }
+    }
+
+    value += "]";
 
     return value;
 }

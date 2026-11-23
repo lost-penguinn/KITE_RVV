@@ -54,6 +54,46 @@ class RVSSProcessor : public ProcessorBase
 
     void Fetch();
 
+    // RVV profiling counters
+    uint64_t rvv_instructions_{};
+    uint64_t rvv_arithmetic_instructions_{};
+    uint64_t rvv_logical_instructions_{};
+    uint64_t rvv_reduction_instructions_{};
+    uint64_t rvv_move_instructions_{};
+    uint64_t rvv_load_instructions_{};
+    uint64_t rvv_store_instructions_{};
+
+    uint64_t rvv_elements_processed_{};
+    uint64_t rvv_memory_bytes_read_{};
+    uint64_t rvv_memory_bytes_written_{};
+    uint64_t rvv_execution_time_ns_{};
+    uint64_t rvv_memory_time_ns_{};
+    uint64_t rvv_peek_time_ns_{};
+    uint64_t rvv_write_time_ns_{};
+    uint64_t rvv_undo_time_ns_{};
+
+        // RVV profiling getters
+    uint64_t getRvvInstructions() const { return rvv_instructions_; }
+    uint64_t getRvvArithmeticInstructions() const { return rvv_arithmetic_instructions_; }
+    uint64_t getRvvLogicalInstructions() const { return rvv_logical_instructions_; }
+    uint64_t getRvvReductionInstructions() const { return rvv_reduction_instructions_; }
+    uint64_t getRvvMoveInstructions() const { return rvv_move_instructions_; }
+    uint64_t getRvvLoadInstructions() const { return rvv_load_instructions_; }
+    uint64_t getRvvStoreInstructions() const { return rvv_store_instructions_; }
+
+    uint64_t getRvvElementsProcessed() const { return rvv_elements_processed_; }
+    uint64_t getRvvMemoryBytesRead() const { return rvv_memory_bytes_read_; }
+    uint64_t getRvvMemoryBytesWritten() const { return rvv_memory_bytes_written_; }
+    uint64_t getRvvExecutionTimeNs() const  {    return rvv_execution_time_ns_; }
+    uint64_t getRvvMemoryTimeNs() const    {    return rvv_memory_time_ns_; }
+    uint64_t getRvvPeekTimeNs() const { return rvv_peek_time_ns_; }
+    uint64_t getRvvWriteTimeNs() const { return rvv_write_time_ns_; }
+    uint64_t getRvvUndoTimeNs() const { return rvv_undo_time_ns_; }
+    uint64_t getScalarSdWriteTimeNs() const { return scalar_sd_write_time_ns_; }
+    uint64_t getScalarSdTotalTimeNs() const { return scalar_sd_total_time_ns_; }
+    uint64_t scalar_sd_write_time_ns_{};
+    uint64_t scalar_sd_total_time_ns_{};
+
     void Decode();
 
     void Execute();
@@ -61,12 +101,13 @@ class RVSSProcessor : public ProcessorBase
     void ExecuteDouble();
     void ExecuteCsr();
     void ExecuteVector();
+    void ExecuteStrassenMatmul();
     void ExecuteVsetvli();
     void HandleSyscall();
-void WriteMemory();
-void WriteVectorMemory();
-void WriteMemoryFloat();
-void WriteMemoryDouble();
+    void WriteMemory();
+    void WriteVectorMemory();
+    void WriteMemoryFloat();
+    void WriteMemoryDouble();
 
     void WriteBack();
     void WriteBackFloat();
@@ -83,6 +124,7 @@ void WriteMemoryDouble();
     void Undo() override;
     void Redo() override;
     void Reset() override;
+
 
     void SetActiveWireNames() override;
     void setProcessorState() override;

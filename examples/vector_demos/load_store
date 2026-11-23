@@ -1,0 +1,16 @@
+.data
+input:
+    .word 11, 22, 33, 44
+
+output:
+    .word 0, 0, 0, 0
+
+.text
+li t1, 4
+vsetvli t0, t1, 208
+
+la a0, input
+la a1, output
+
+vle32.v v1, (a0)
+vse32.v v1, (a1)

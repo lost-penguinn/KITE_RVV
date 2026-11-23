@@ -1,0 +1,84 @@
+
+.data
+
+readings:
+    .word 1, 2, 3, 4
+    .word 5, 6, 7, 8
+    .word 9, 10, 11, 12
+    .word 13, 14, 15, 16
+
+weights:
+    .word 2, 1, 3, 2
+    .word 1, 2, 1, 3
+    .word 2, 1, 2, 1
+    .word 3, 2, 1, 2
+
+result:
+    .word 0
+
+temp:
+    .word 0
+
+
+.text
+
+main:
+
+    la a0, readings
+    la a1, weights
+
+    li t3, 0          # Accumulated score
+    li t4, 4          # Four iterations
+
+    # Configure four 32-bit elements
+    li t1, 4
+    vsetvli t0, t1, 208
+
+loop:
+
+    # Load four readings
+    vle32.v v1, (a0)
+
+    # Load four weights
+    vle32.v v2, (a1)
+
+    # Element-wise multiplication
+    vmul.vv v3, v1, v2
+
+    # Initialize reduction seed to zero
+    vmv.v.i v4, 0
+
+    # Sum the four products
+    vredsum.vs v5, v3, v4
+
+    # Set VL = 1 to store only the reduction result
+    li t1, 1
+    vsetvli t0, t1, 208
+
+    la t5, temp
+    vse32.v v5, (t5)
+
+    # Retrieve the partial sum
+    lw t6, 0(t5)
+
+    # Accumulate partial sum
+    add t3, t3, t6
+
+    # Restore VL = 4
+    li t1, 4
+    vsetvli t0, t1, 208
+
+    # Advance both arrays by four elements
+    addi a0, a0, 16
+    addi a1, a1, 16
+
+    # Repeat
+    addi t4, t4, -1
+    bne t4, zero, loop
+
+    # Store final result
+    la t5, result
+    sw t3, 0(t5)
+
+end:
+    j end

@@ -8,6 +8,7 @@
  *
  */
 
+#include <iostream>
 #include "processor/processor_factory.h"
 #include "processor/rv5s/rv5s_processor_h_f.h"
 #include "processor/rv5s/rv5s_processor_h_nf.h"
@@ -93,7 +94,67 @@ void ProcessorManager::loadProgram(const std::string &sourceText)
 void ProcessorManager::runSlot()
 {
     run();
+
+    std::cout << "\n========== RVV PROFILING ==========\n";
+
+    std::cout << "Total RVV Instructions: "
+              << getRvvInstructions() << '\n';
+
+    std::cout << "Arithmetic Instructions: "
+              << getRvvArithmeticInstructions() << '\n';
+
+    std::cout << "Logical Instructions: "
+              << getRvvLogicalInstructions() << '\n';
+
+    std::cout << "Reduction Instructions: "
+              << getRvvReductionInstructions() << '\n';
+
+    std::cout << "Move Instructions: "
+              << getRvvMoveInstructions() << '\n';
+
+    std::cout << "Vector Loads: "
+              << getRvvLoadInstructions() << '\n';
+
+    std::cout << "Vector Stores: "
+              << getRvvStoreInstructions() << '\n';
+
+    std::cout << "Elements Processed: "
+              << getRvvElementsProcessed() << '\n';
+
+    std::cout << "Memory Bytes Read: "
+              << getRvvMemoryBytesRead() << '\n';
+
+    std::cout << "Memory Bytes Written: "
+              << getRvvMemoryBytesWritten() << '\n';
+
+    std::cout << "===================================\n";
+
+    std::cout << "Vector execution time: "
+          << getRvvExecutionTimeNs() << " ns\n";
+
+    std::cout << "Vector memory time: "
+            << getRvvMemoryTimeNs() << " ns\n";
+
+    std::cout << "  Peek time: "
+          << getRvvPeekTimeNs() << " ns\n";
+
+    std::cout << "  Write time: "
+            << getRvvWriteTimeNs() << " ns\n";
+
+    std::cout << "  Undo bookkeeping time: "
+            << getRvvUndoTimeNs() << " ns\n";
     emit runFinishedSignal();
+
+    std::cout << "\n========== SCALAR SD PROFILING ==========\n";
+
+std::cout << "SD write time: "
+          << getScalarSdWriteTimeNs() << " ns\n";
+
+std::cout << "SD total time: "
+          << getScalarSdTotalTimeNs() << " ns\n";
+
+std::cout << "=========================================\n";
+
 }
 
 void ProcessorManager::debugRunSlot()
@@ -320,4 +381,104 @@ unsigned int ProcessorManager::getInstructionsRetired() const
     return m_currentProcessor->instructions_retired_;
 }
 
+// RVV profiling getters
+
+uint64_t ProcessorManager::getRvvInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvArithmeticInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvArithmeticInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvLogicalInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvLogicalInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvReductionInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvReductionInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvMoveInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvMoveInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvLoadInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvLoadInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvStoreInstructions() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvStoreInstructions() : 0;
+}
+
+uint64_t ProcessorManager::getRvvElementsProcessed() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvElementsProcessed() : 0;
+}
+
+uint64_t ProcessorManager::getRvvMemoryBytesRead() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvMemoryBytesRead() : 0;
+}
+
+uint64_t ProcessorManager::getRvvMemoryBytesWritten() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvMemoryBytesWritten() : 0;
+}
+uint64_t ProcessorManager::getRvvExecutionTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvExecutionTimeNs() : 0;
+}
+
+uint64_t ProcessorManager::getRvvMemoryTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvMemoryTimeNs() : 0;
+}
+uint64_t ProcessorManager::getRvvPeekTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvPeekTimeNs() : 0;
+}
+
+uint64_t ProcessorManager::getRvvWriteTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvWriteTimeNs() : 0;
+}
+
+uint64_t ProcessorManager::getRvvUndoTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getRvvUndoTimeNs() : 0;
+}
+uint64_t ProcessorManager::getScalarSdWriteTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getScalarSdWriteTimeNs() : 0;
+}
+
+uint64_t ProcessorManager::getScalarSdTotalTimeNs() const
+{
+    auto* rvss = dynamic_cast<RVSSProcessor*>(m_currentProcessor.get());
+    return rvss ? rvss->getScalarSdTotalTimeNs() : 0;
+}
 }//namespace Kites

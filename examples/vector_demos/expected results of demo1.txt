@@ -1,0 +1,398 @@
+
+
+==================================================
+1. VECTOR CONFIGURATION
+==================================================
+
+Instruction:
+    vsetvli t3, zero, 208
+
+Configuration:
+    SEW = 32 bits
+    LMUL = 1
+    VL = 4
+    VLMAX = 4
+
+Each vector register contains four 32-bit elements.
+
+
+==================================================
+2. INPUT ARRAY INITIALIZATION
+==================================================
+
+ARRAY A (Starting address: 0x2000)
+
+    A = [10, 20, 30, 40]
+
+ARRAY B (Starting address: 0x2100)
+
+    B = [3, 5, 6, 9]
+
+After executing:
+
+    vle32.v v1, (t0)
+    vle32.v v2, (t2)
+
+Expected vector registers:
+
+    v1 = [10, 20, 30, 40]
+    v2 = [3, 5, 6, 9]
+
+
+==================================================
+3. VECTOR INITIALIZATION INSTRUCTIONS
+==================================================
+
+Instruction:
+    vmv.v.i v16, 1
+
+Calculation:
+    Broadcast immediate value 1 to all active elements.
+
+Expected:
+    v16 = [1, 1, 1, 1]
+
+Instructions:
+    addi t4, x0, 5
+    vmv.v.x v17, t4
+
+Calculation:
+    t4 = 5
+    Broadcast scalar value 5 to all active elements.
+
+Expected:
+    v17 = [5, 5, 5, 5]
+
+Scalar initialization:
+
+    addi t5, x0, 3
+    addi t6, x0, 7
+
+Expected:
+    t5 = 3
+    t6 = 7
+
+
+==================================================
+4. VECTOR-VECTOR ARITHMETIC OPERATIONS
+==================================================
+
+A. VECTOR ADDITION
+
+Instruction:
+    vadd.vv v3, v1, v2
+
+Formula:
+    v3[i] = v1[i] + v2[i]
+
+Calculations:
+    v3[0] = 10 + 3 = 13
+    v3[1] = 20 + 5 = 25
+    v3[2] = 30 + 6 = 36
+    v3[3] = 40 + 9 = 49
+
+Expected:
+    v3 = [13, 25, 36, 49]
+
+
+B. VECTOR SUBTRACTION
+
+Instruction:
+    vsub.vv v4, v1, v2
+
+Formula:
+    v4[i] = v1[i] - v2[i]
+
+Calculations:
+    v4[0] = 10 - 3 = 7
+    v4[1] = 20 - 5 = 15
+    v4[2] = 30 - 6 = 24
+    v4[3] = 40 - 9 = 31
+
+Expected:
+    v4 = [7, 15, 24, 31]
+
+
+C. VECTOR MULTIPLICATION
+
+Instruction:
+    vmul.vv v5, v1, v2
+
+Formula:
+    v5[i] = v1[i] * v2[i]
+
+Calculations:
+    v5[0] = 10 * 3 = 30
+    v5[1] = 20 * 5 = 100
+    v5[2] = 30 * 6 = 180
+    v5[3] = 40 * 9 = 360
+
+Expected:
+    v5 = [30, 100, 180, 360]
+
+
+==================================================
+5. VECTOR-SCALAR ARITHMETIC OPERATIONS
+==================================================
+
+A. VECTOR ADD SCALAR
+
+Instruction:
+    vadd.vx v6, v1, t4
+
+Scalar:
+    t4 = 5
+
+Formula:
+    v6[i] = v1[i] + t4
+
+Calculations:
+    v6[0] = 10 + 5 = 15
+    v6[1] = 20 + 5 = 25
+    v6[2] = 30 + 5 = 35
+    v6[3] = 40 + 5 = 45
+
+Expected:
+    v6 = [15, 25, 35, 45]
+
+
+B. VECTOR SUBTRACT SCALAR
+
+Instruction:
+    vsub.vx v7, v1, t4
+
+Formula:
+    v7[i] = v1[i] - t4
+
+Calculations:
+    v7[0] = 10 - 5 = 5
+    v7[1] = 20 - 5 = 15
+    v7[2] = 30 - 5 = 25
+    v7[3] = 40 - 5 = 35
+
+Expected:
+    v7 = [5, 15, 25, 35]
+
+
+C. REVERSE VECTOR-SCALAR SUBTRACTION
+
+Instruction:
+    vrsub.vx v8, v1, t4
+
+IMPORTANT:
+    Reverse subtraction means scalar - vector.
+
+Formula:
+    v8[i] = t4 - v1[i]
+
+Calculations:
+    v8[0] = 5 - 10 = -5
+    v8[1] = 5 - 20 = -15
+    v8[2] = 5 - 30 = -25
+    v8[3] = 5 - 40 = -35
+
+Expected:
+    v8 = [-5, -15, -25, -35]
+
+32-bit hexadecimal representation:
+    -5  = FFFFFFFB
+    -15 = FFFFFFF1
+    -25 = FFFFFFE7
+    -35 = FFFFFFDD
+
+
+D. VECTOR MULTIPLY SCALAR
+
+Instruction:
+    vmul.vx v9, v2, t5
+
+Scalar:
+    t5 = 3
+
+Formula:
+    v9[i] = v2[i] * t5
+
+Calculations:
+    v9[0] = 3 * 3 = 9
+    v9[1] = 5 * 3 = 15
+    v9[2] = 6 * 3 = 18
+    v9[3] = 9 * 3 = 27
+
+Expected:
+    v9 = [9, 15, 18, 27]
+
+
+==================================================
+6. VECTOR-VECTOR LOGICAL OPERATIONS
+==================================================
+
+A. BITWISE AND
+
+Instruction:
+    vand.vv v10, v1, v2
+
+Formula:
+    v10[i] = v1[i] & v2[i]
+
+Calculations:
+    10 & 3 = 2
+    20 & 5 = 4
+    30 & 6 = 6
+    40 & 9 = 8
+
+Expected:
+    v10 = [2, 4, 6, 8]
+
+
+B. BITWISE OR
+
+Instruction:
+    vor.vv v11, v1, v2
+
+Formula:
+    v11[i] = v1[i] | v2[i]
+
+Calculations:
+    10 | 3 = 11
+    20 | 5 = 21
+    30 | 6 = 30
+    40 | 9 = 41
+
+Expected:
+    v11 = [11, 21, 30, 41]
+
+
+C. BITWISE XOR
+
+Instruction:
+    vxor.vv v12, v1, v2
+
+Formula:
+    v12[i] = v1[i] ^ v2[i]
+
+Calculations:
+    10 ^ 3 = 9
+    20 ^ 5 = 17
+    30 ^ 6 = 24
+    40 ^ 9 = 33
+
+Expected:
+    v12 = [9, 17, 24, 33]
+
+
+==================================================
+7. VECTOR-SCALAR LOGICAL OPERATIONS
+==================================================
+
+Scalar:
+    t6 = 7
+
+
+A. BITWISE AND WITH SCALAR
+
+Instruction:
+    vand.vx v13, v1, t6
+
+Formula:
+    v13[i] = v1[i] & t6
+
+Calculations:
+    10 & 7 = 2
+    20 & 7 = 4
+    30 & 7 = 6
+    40 & 7 = 0
+
+Expected:
+    v13 = [2, 4, 6, 0]
+
+
+B. BITWISE OR WITH SCALAR
+
+Instruction:
+    vor.vx v14, v1, t6
+
+Formula:
+    v14[i] = v1[i] | t6
+
+Calculations:
+    10 | 7 = 15
+    20 | 7 = 23
+    30 | 7 = 31
+    40 | 7 = 47
+
+Expected:
+    v14 = [15, 23, 31, 47]
+
+
+C. BITWISE XOR WITH SCALAR
+
+Instruction:
+    vxor.vx v15, v1, t6
+
+Formula:
+    v15[i] = v1[i] ^ t6
+
+Calculations:
+    10 ^ 7 = 13
+    20 ^ 7 = 19
+    30 ^ 7 = 25
+    40 ^ 7 = 47
+
+Expected:
+    v15 = [13, 19, 25, 47]
+
+
+==================================================
+8. COMPLETE EXPECTED REGISTER RESULTS
+==================================================
+
+Register    Instruction      Expected Values
+
+v1          Input A          [10, 20, 30, 40]
+v2          Input B          [3, 5, 6, 9]
+
+v3          vadd.vv          [13, 25, 36, 49]
+v4          vsub.vv          [7, 15, 24, 31]
+v5          vmul.vv          [30, 100, 180, 360]
+
+v6          vadd.vx          [15, 25, 35, 45]
+v7          vsub.vx          [5, 15, 25, 35]
+v8          vrsub.vx         [-5, -15, -25, -35]
+v9          vmul.vx          [9, 15, 18, 27]
+
+v10         vand.vv          [2, 4, 6, 8]
+v11         vor.vv           [11, 21, 30, 41]
+v12         vxor.vv          [9, 17, 24, 33]
+
+v13         vand.vx          [2, 4, 6, 0]
+v14         vor.vx           [15, 23, 31, 47]
+v15         vxor.vx          [13, 19, 25, 47]
+
+v16         vmv.v.i          [1, 1, 1, 1]
+v17         vmv.v.x          [5, 5, 5, 5]
+
+
+==================================================
+9. EXPECTED MEMORY STORAGE RESULTS
+==================================================
+
+The result memory starts at address 0x2200.
+
+Each vector occupies:
+    4 elements * 4 bytes = 16 bytes
+
+Address     Register     Expected Values
+
+0x2200      v3           [13, 25, 36, 49]
+0x2210      v4           [7, 15, 24, 31]
+0x2220      v5           [30, 100, 180, 360]
+0x2230      v6           [15, 25, 35, 45]
+0x2240      v7           [5, 15, 25, 35]
+0x2250      v8           [-5, -15, -25, -35]
+0x2260      v9           [9, 15, 18, 27]
+0x2270      v10          [2, 4, 6, 8]
+0x2280      v11          [11, 21, 30, 41]
+0x2290      v12          [9, 17, 24, 33]
+0x22A0      v13          [2, 4, 6, 0]
+0x22B0      v14          [15, 23, 31, 47]
+0x22C0      v15          [13, 19, 25, 47]

@@ -1,0 +1,112 @@
+
+main:
+    # Configure: SEW=32, LMUL=1, VLMAX=4
+    vsetvli t3, zero, 208
+
+    # ---------------------------------
+    # Initialize input array A at 0x2000
+    # A = [10, 20, 30, 40]
+    # ---------------------------------
+    lui t0, 0x2
+
+    addi t1, x0, 10
+    sw t1, 0(t0)
+    addi t1, x0, 20
+    sw t1, 4(t0)
+    addi t1, x0, 30
+    sw t1, 8(t0)
+    addi t1, x0, 40
+    sw t1, 12(t0)
+
+    # ---------------------------------
+    # Initialize input array B at 0x2100
+    # B = [3, 5, 6, 9]
+    # ---------------------------------
+    addi t2, t0, 0x100
+
+    addi t1, x0, 3
+    sw t1, 0(t2)
+    addi t1, x0, 5
+    sw t1, 4(t2)
+    addi t1, x0, 6
+    sw t1, 8(t2)
+    addi t1, x0, 9
+    sw t1, 12(t2)
+
+    # Load arrays into vector registers
+    vle32.v v1, (t0)
+    vle32.v v2, (t2)
+
+    # ---------------------------------
+    # Initialization instructions
+    # ---------------------------------
+    vmv.v.i v16, 1
+    addi t4, x0, 5
+    vmv.v.x v17, t4
+
+    # Scalar constants
+    addi t5, x0, 3
+    addi t6, x0, 7
+
+    # ---------------------------------
+    # Vector-vector arithmetic
+    # ---------------------------------
+    vadd.vv v3, v1, v2
+    vsub.vv v4, v1, v2
+    vmul.vv v5, v1, v2
+
+    # ---------------------------------
+    # Vector-scalar arithmetic
+    # ---------------------------------
+    vadd.vx v6, v1, t4
+    vsub.vx v7, v1, t4
+    vrsub.vx v8, v1, t4
+    vmul.vx v9, v2, t5
+
+    # ---------------------------------
+    # Vector-vector logical operations
+    # ---------------------------------
+    vand.vv v10, v1, v2
+    vor.vv v11, v1, v2
+    vxor.vv v12, v1, v2
+
+    # ---------------------------------
+    # Vector-scalar logical operations
+    # ---------------------------------
+    vand.vx v13, v1, t6
+    vor.vx v14, v1, t6
+    vxor.vx v15, v1, t6
+
+    # ---------------------------------
+    # Store results starting at 0x2200
+    # ---------------------------------
+    addi t3, t0, 0x200
+
+    vse32.v v3, (t3)
+    addi t3, t3, 16
+    vse32.v v4, (t3)
+    addi t3, t3, 16
+    vse32.v v5, (t3)
+    addi t3, t3, 16
+    vse32.v v6, (t3)
+    addi t3, t3, 16
+    vse32.v v7, (t3)
+    addi t3, t3, 16
+    vse32.v v8, (t3)
+    addi t3, t3, 16
+    vse32.v v9, (t3)
+    addi t3, t3, 16
+    vse32.v v10, (t3)
+    addi t3, t3, 16
+    vse32.v v11, (t3)
+    addi t3, t3, 16
+    vse32.v v12, (t3)
+    addi t3, t3, 16
+    vse32.v v13, (t3)
+    addi t3, t3, 16
+    vse32.v v14, (t3)
+    addi t3, t3, 16
+    vse32.v v15, (t3)
+
+end:
+    addi x0, x0, 0

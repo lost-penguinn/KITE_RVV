@@ -1,0 +1,14 @@
+.data
+values:
+    .word 1, 2, 3, 4
+
+.text
+
+li t1, 4
+vsetvli t0, t1, 208
+
+la a0, values
+vle32.v v1, (a0)
+
+vmv.v.i v2, 0
+vredsum.vs v3, v1, v2

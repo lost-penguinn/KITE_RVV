@@ -68,6 +68,25 @@ public:
     unsigned int getStallCycles() const;
     unsigned int getCycles() const;
     unsigned int getInstructionsRetired() const;
+    uint64_t getRvvInstructions() const;
+    uint64_t getRvvArithmeticInstructions() const;
+    uint64_t getRvvLogicalInstructions() const;
+    uint64_t getRvvReductionInstructions() const;
+    uint64_t getRvvMoveInstructions() const;
+    uint64_t getRvvLoadInstructions() const;
+    uint64_t getRvvStoreInstructions() const;
+
+    uint64_t getRvvElementsProcessed() const;
+    uint64_t getRvvMemoryBytesRead() const;
+    uint64_t getRvvMemoryBytesWritten() const;
+
+    uint64_t getRvvExecutionTimeNs() const;
+    uint64_t getRvvMemoryTimeNs() const;
+    uint64_t getRvvPeekTimeNs() const;
+    uint64_t getRvvWriteTimeNs() const;
+    uint64_t getRvvUndoTimeNs() const;
+    uint64_t getScalarSdWriteTimeNs() const;
+    uint64_t getScalarSdTotalTimeNs() const;
 private:
     void updateEditorHighlight(const std::vector<uint64_t>& programCounters);
     // Maps the current program counter back to a 1-based editor source line,

@@ -1,0 +1,309 @@
+# Kites Simulator — Development Progress
+## 17 November 2026
+
+## 1. Overview
+
+Implemented and integrated a custom RISC-V instruction, `vmatmul.strassen`, into the Kites simulator.
+
+The instruction performs square matrix multiplication using the Strassen algorithm, with vector registers used as the computational workspace. It is integrated into the assembler, instruction decoder, RVSS processor execution pipeline, and instruction history mechanism.
+
+The implementation supports matrices with dimensions that are not powers of two, including 3×3 and 33×33 matrices.
+
+---
+
+## 2. New Custom Instruction
+
+**Instruction syntax:**
+
+```asm
+vmatmul.strassen vD, vA, vB
+```
+
+The instruction uses the following register convention:
+
+| Register | Purpose |
+|---|---|
+| `a0` | Base address of matrix A |
+| `a1` | Base address of matrix B |
+| `a2` | Base address of output matrix C |
+| `a3` | Matrix dimension N |
+| `vD` | Destination/workspace vector register |
+| `vA` | First source/workspace vector register |
+| `vB` | Second source/workspace vector register |
+
+Matrices are represented as row-major arrays of 32-bit integers in memory.
+
+The instruction calculates:
+
+\[
+C=A\times B
+\]
+
+The resulting matrix is written back to the memory region specified by `a2`.
+
+## 3. Code Changes and Locations
+
+### A. Instruction declaration and assembler parsing
+
+**File:** `src/common/instructions.cpp`
+
+Changes:
+- Added `vmatmul.strassen` to the recognized instruction names.
+- Added its operand syntax using `SyntaxType::O_VEC_C_VEC_C_VEC`.
+- Enabled parsing of three vector-register operands.
+
+This allows assembly programs to use:
+
+```asm
+vmatmul.strassen v3, v1, v2
+```
+
+### B. Machine-code generation
+
+**File:** `src/assembler/code_generator.cpp`
+
+Added:
+
+```cpp
+uint32_t generateStrassenMatmulMachineCode(
+    const ICUnit &block);
+```
+
+The encoder:
+- Extracts the destination and two source vector-register indices.
+- Encodes the instruction using the RISC-V Custom-0 opcode (`0x0B`).
+- Places the vector-register indices in the corresponding instruction fields.
+
+The code generator dispatches `vmatmul.strassen` to this encoder.
+
+Verified encoding:
+
+```text
+vmatmul.strassen v3, v1, v2
+Machine code: 0011018b
+```
+
+### C. Processor declaration
+
+**File:** `src/processor/rvss/rvss_processor.h`
+
+Added the execution handler declaration:
+
+```cpp
+void ExecuteStrassenMatmul();
+```
+
+### D. Processor execution and Strassen implementation
+
+**File:** `src/processor/rvss/rvss_processor.cpp`
+
+Integrated the custom instruction into the RVSS execution pipeline.
+
+The Custom-0 opcode (`0x0B`) dispatches execution to:
+
+```cpp
+ExecuteStrassenMatmul();
+```
+
+The handler implements the following functionality:
+
+- Reads matrix addresses and dimension from `a0`–`a3`.
+- Loads both input matrices from memory.
+- Supports arbitrary positive matrix dimensions by padding matrices to the next power of two.
+- Executes recursive Strassen multiplication.
+- Uses vector-register lanes for matrix addition, subtraction, multiplication, and accumulation operations.
+- Processes four 32-bit lanes through its vector workspace.
+- Uses a base-case multiplication kernel for smaller submatrices.
+- Reconstructs the resulting matrix and writes it to output memory.
+
+The implementation uses a recursion threshold of 32 for switching to the base-case multiplication kernel.
+
+The seven Strassen intermediate products are:
+
+\[
+\begin{aligned}
+M_1 &= (A_{11}+A_{22})(B_{11}+B_{22})\\
+M_2 &= (A_{21}+A_{22})B_{11}\\
+M_3 &= A_{11}(B_{12}-B_{22})\\
+M_4 &= A_{22}(B_{21}-B_{11})\\
+M_5 &= (A_{11}+A_{12})B_{22}\\
+M_6 &= (A_{21}-A_{11})(B_{11}+B_{12})\\
+M_7 &= (A_{12}-A_{22})(B_{21}+B_{22})
+\end{aligned}
+\]
+
+The four result quadrants are then reconstructed from these intermediate products.
+
+### E. Memory and register history integration
+
+**Files:**
+- `src/processor/processor_base.h`
+- `src/processor/rvss/rvss_processor.cpp`
+
+Integrated the custom instruction's changes with the existing undo/redo mechanism.
+
+The implementation records:
+- Previous and updated vector-register contents.
+- Previous and updated output-memory bytes.
+
+The output is committed through the memory controller, and vector-register changes are recorded as register changes.
+
+This allows the complete custom instruction to participate in Kites' execution history.
+
+---
+
+## 4. New Assembly Examples
+
+### A. 3×3 matrix multiplication
+
+**File:** `examples/strassen_matmul_3x3.s`
+
+Demonstrates the custom instruction using:
+- Matrix A at `0x2000`.
+- Matrix B at `0x2100`.
+- Output matrix C at `0x2200`.
+- Matrix dimension set to 3.
+
+### B. 33×33 matrix multiplication
+
+**File:** `examples/strassen_matmul_33.s`
+
+Demonstrates multiplication of 33×33 matrices.
+
+The test uses an identity matrix as A and a sequentially populated matrix as B. The expected output is B itself.
+
+### C. Complete matrix multiplication demonstration with memory initialization
+
+**File:** `examples/strassen_demo.s`
+
+Provides a standalone assembly demonstration that:
+1. Initializes matrix A in memory.
+2. Initializes matrix B in memory.
+3. Initializes the output matrix region.
+4. Sets the input and output addresses.
+5. Sets the matrix dimension.
+6. Executes `vmatmul.strassen`.
+
+The example uses `sw` instructions to seed matrix values directly from assembly.
+
+---
+
+## 5. Automated Tests
+
+**File:** `test/strassen_matmul_test.cpp`
+
+Added tests covering the custom instruction's functionality.
+
+| Test | Functionality verified | Result |
+|---|---|---|
+| `MultipliesThreeByThreeMatrices` | Correct 3×3 multiplication | Passed |
+| `MultipliesThirtyThreeByThirtyThreeMatrices` | Correct 33×33 multiplication | Passed |
+| `UndoRedoRestoresMemoryAndVectorRegisters` | Restoration of output memory and vector registers through Undo/Redo | Passed |
+| `SupportsOutputAliasingInputA` | Correct multiplication when output memory aliases input A | Passed |
+
+### Test execution
+
+Build:
+
+```bash
+cmake --build build --target kites_test -j$(nproc)
+```
+
+Run all Strassen tests:
+
+```bash
+./build/test/kites_test \
+  --gtest_filter='StrassenMatmulTest.*'
+```
+
+The individual tests were also executed successfully.
+
+---
+
+## 6. Verified Matrix Multiplication Example
+
+The 3×3 demonstration uses the following input matrices.
+
+**Matrix A**
+
+\[
+A=
+\begin{bmatrix}
+1&2&3\\
+4&5&6\\
+7&8&9
+\end{bmatrix}
+\]
+
+**Matrix B**
+
+\[
+B=
+\begin{bmatrix}
+9&8&7\\
+6&5&4\\
+3&2&1
+\end{bmatrix}
+\]
+
+**Expected output**
+
+\[
+C=
+\begin{bmatrix}
+30&24&18\\
+84&69&54\\
+138&114&90
+\end{bmatrix}
+\]
+
+The standalone assembly demonstration was executed in the Kites simulator, and the output values matched the expected matrix.
+
+### Output memory layout
+
+| Address | Result |
+|---|---:|
+| `0x2200` | 30 |
+| `0x2204` | 24 |
+| `0x2208` | 18 |
+| `0x220C` | 84 |
+| `0x2210` | 69 |
+| `0x2214` | 54 |
+| `0x2218` | 138 |
+| `0x221C` | 114 |
+| `0x2220` | 90 |
+
+---
+
+## 7. Functionality Available in Kites Now
+
+With the addition of `vmatmul.strassen`, Kites can now:
+
+1. Assemble programs containing the custom Strassen matrix multiplication instruction.
+2. Execute matrix multiplication through the RVSS processor.
+3. Multiply square matrices with arbitrary positive dimensions using internal padding.
+4. Use vector-register lanes as the computational workspace for the Strassen operations.
+5. Store the resulting matrix directly in simulator memory.
+6. Initialize matrix data through ordinary RISC-V assembly instructions.
+7. Execute the custom instruction step-by-step in the simulator.
+8. Inspect the resulting matrix in memory and the vector workspace registers.
+9. Undo and redo the custom instruction while restoring its recorded memory and vector-register changes.
+10. Execute matrix multiplication when the output region aliases input A.
+
+## 8. Files Added or Modified
+
+| File location | Change |
+|---|---|
+| `src/common/instructions.cpp` | Instruction registration and parsing syntax |
+| `src/assembler/code_generator.cpp` | Custom instruction machine-code encoder |
+| `src/processor/rvss/rvss_processor.h` | Execution-handler declaration |
+| `src/processor/rvss/rvss_processor.cpp` | Strassen implementation, execution dispatch, memory and vector-register updates |
+| `src/processor/processor_base.h` | Execution-history data structures used for recording state changes |
+| `examples/strassen_matmul_3x3.s` | 3×3 multiplication example |
+| `examples/strassen_matmul_33.s` | 33×33 multiplication example |
+| `examples/strassen_demo.s` | Complete assembly demonstration with matrix initialization |
+| `test/strassen_matmul_test.cpp` | Automated Strassen functionality tests |
+
+---
+
+**Summary:** Kites now supports a custom Strassen matrix multiplication instruction integrated into its assembler and RVSS processor. It can initialize matrices through assembly, execute recursive matrix multiplication using vector-register workspace, write results to memory, inspect execution state, and undo or redo the instruction. The implementation has been verified with 3×3 and 33×33 multiplication tests and a complete simulator demonstration.

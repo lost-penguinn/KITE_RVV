@@ -1,0 +1,301 @@
+# Kites – RVV Performance Profiling and Optimization Report
+
+**Date:** 15 November 2026
+**Project:** Kites – RISC-V Vector Extension Support
+**Focus:** RVV memory-operation profiling, benchmarking and optimization
+
+## 1. Objectives
+
+The objectives of today's work were:
+
+- Measure the execution time of RVV arithmetic and memory operations.
+- Introduce profiling information for vector instructions.
+- Create larger workloads to obtain more meaningful performance measurements.
+- Identify overhead in vector memory operations.
+- Optimize the RVV-specific memory implementation without modifying the existing cache or memory-controller behavior.
+
+## 2. Code changes implemented
+
+### 2.1 RVV execution and memory profiling
+
+**File modified:** `src/processor/rvss/rvss_processor.h`
+
+Added host-side timing variables:
+
+- `rvv_execution_time_ns_`
+- `rvv_memory_time_ns_`
+
+Added getter functions to expose the timing measurements.
+
+The existing RVV profiling counters were also used to track:
+
+- Total RVV instructions.
+- Arithmetic instructions.
+- Logical instructions.
+- Reduction instructions.
+- Move instructions.
+- Vector loads and stores.
+- Total vector elements processed.
+- Memory bytes read and written.
+
+**File modified:** `src/processor/rvss/rvss_processor.cpp`
+
+Implemented a `ScopedTimer` utility using `std::chrono::steady_clock`.
+
+The timer records elapsed nanoseconds when the instrumented function exits.
+
+Timing instrumentation was added to:
+
+- `ExecuteVector()` – measures the complete vector instruction execution function.
+- `WriteVectorMemory()` – measures the complete vector memory operation function.
+
+The profiling counters and timing variables are reset when the processor is reset.
+
+### 2.2 Processor manager integration
+
+**Files modified:**
+- `src/processor/processor_manager.h`
+- `src/processor/processor_manager.cpp`
+
+Added forwarding getter functions in `ProcessorManager` to retrieve the RVV profiling information from the active RVSS processor.
+
+Extended `ProcessorManager::runSlot()` to print an RVV profiling report after program execution.
+
+The report includes instruction counts, elements processed, memory traffic and execution timings.
+
+Example report structure:
+
+- Total RVV Instructions
+- Arithmetic Instructions
+- Logical Instructions
+- Reduction Instructions
+- Move Instructions
+- Vector Loads
+- Vector Stores
+- Elements Processed
+- Memory Bytes Read
+- Memory Bytes Written
+- Vector execution time
+- Vector memory time
+
+### 2.3 RVV store-path optimization
+
+**File modified:** `src/processor/rvss/rvss_processor.cpp`
+
+Optimized the construction of the new-byte undo buffer inside `WriteVectorMemory()`.
+
+Previously, the new byte values were reconstructed from the packed 32-bit word after packing.
+
+The retained implementation now directly appends each source byte to `new_bytes_vec` while constructing the word:
+
+```cpp
+const uint8_t source_byte = source[i * 4 + byte];
+
+value |= static_cast<uint32_t>(source_byte) << (byte * 8);
+
+old_bytes_vec.push_back(
+    memory_controller_.peekByte(addr + byte));
+
+new_bytes_vec.push_back(source_byte);
+```
+
+The implementation also reserves the required capacity in both undo buffers:
+
+```cpp
+old_bytes_vec.reserve(vl * 4);
+new_bytes_vec.reserve(vl * 4);
+```
+
+This avoids repeatedly extracting bytes from the packed word and keeps the undo-record format unchanged.
+
+The following existing behavior was preserved:
+
+- Old memory bytes are captured using `peekByte()`.
+- Actual memory writes continue through `writeWord()`.
+- Undo and redo continue using the existing `MemoryChange` structure.
+- Existing cache and memory-controller behavior remains unchanged.
+
+## 3. Benchmark workloads created
+
+Three dedicated benchmark programs were used to study different aspects of vector memory performance.
+
+### 3.1 Large vector addition
+
+**File:** `examples/rvv_large_add_test.s`
+
+Created a vector addition workload processing 256 elements.
+
+The program uses:
+
+- Two input arrays, each containing 256 32-bit integers.
+- One output array.
+- `vle32.v` to load input elements.
+- `vadd.vv` to perform vector addition.
+- `vse32.v` to store results.
+
+Since the configured VLEN is 128 bits and SEW is 32 bits, each vector instruction processes four elements.
+
+The workload executes 64 batches of four elements.
+
+**Expected output:** 1002, 1004, 1006, ... , 1512.
+
+**Profiling results:**
+
+| Metric | Result |
+|---|---:|
+| Total RVV instructions | 256 |
+| Arithmetic instructions | 64 |
+| Vector loads | 128 |
+| Vector stores | 64 |
+| Elements processed | 1024 |
+| Memory bytes read | 2048 |
+| Memory bytes written | 1024 |
+
+**Four-run timing average:**
+
+| Measurement | Average |
+|---|---:|
+| Vector execution | 651.71 µs |
+| Vector memory | 7,633.33 µs |
+
+### 3.2 Store-only workload
+
+**File:** `examples/rvv_store_only_test.s`
+
+Created a workload focused on repeated vector stores.
+
+The program initializes a vector register using one vector load and then performs 64 vector stores.
+
+**Profiling results:**
+
+| Metric | Result |
+|---|---:|
+| Total RVV instructions | 65 |
+| Vector loads | 1 |
+| Vector stores | 64 |
+| Elements processed | 260 |
+| Memory bytes read | 16 |
+| Memory bytes written | 1024 |
+
+**Five-run baseline before the retained store-path optimization:**
+
+| Run | Memory time |
+|---|---:|
+| 1 | 4,151,760 ns |
+| 2 | 3,907,333 ns |
+| 3 | 3,921,993 ns |
+| 4 | 3,638,144 ns |
+| 5 | 3,888,191 ns |
+
+Average: **3,901,484 ns (3.901 ms)**.
+
+**Five-run average after the retained optimization:**
+
+Average: **3,735,109 ns (3.735 ms)**.
+
+This represents an approximately 4.26% reduction in the measured average.
+
+The individual measurements still showed variation, so this result is an encouraging observation rather than conclusive proof of a statistically significant performance improvement.
+
+### 3.3 Load-only workload
+
+**File:** `examples/rvv_load_only_test.s`
+
+Created a workload containing 128 vector loads without vector arithmetic or stores.
+
+**Profiling results:**
+
+| Metric | Result |
+|---|---:|
+| Vector loads | 128 |
+| Elements processed | 512 |
+| Memory bytes read | 2048 |
+| Memory bytes written | 0 |
+
+**Five-run average memory time:**
+
+3,152,602 ns (3.153 ms).
+
+This workload provided a separate measurement of repeated vector load operations.
+
+## 4. Smaller workload validation
+
+A smaller RVV workload was also used to validate the profiling counters.
+
+The program successfully loaded:
+
+- `v1 = {10, 20, 30, 40}`
+- `v2 = {3, 5, 6, 9}`
+
+It performed vector addition and stored:
+
+- `v3 = {13, 25, 36, 49}`
+
+The results were verified in memory at addresses `0x10000020` through `0x1000002c`.
+
+The profiling report showed:
+
+| Metric | Result |
+|---|---:|
+| Total RVV instructions | 7 |
+| Arithmetic instructions | 3 |
+| Logical instructions | 0 |
+| Reduction instructions | 1 |
+| Move instructions | 0 |
+| Vector loads | 2 |
+| Vector stores | 1 |
+| Elements processed | 28 |
+| Memory bytes read | 32 |
+| Memory bytes written | 16 |
+
+The counters matched the expected workload behavior.
+
+## 5. Performance observations
+
+### 5.1 Memory operations account for most measured time
+
+The large vector addition workload showed substantially higher time in `WriteVectorMemory()` than in `ExecuteVector()`.
+
+This indicates that the vector memory path is an important area for further performance investigation.
+
+### 5.2 Undo bookkeeping contributes to memory-operation overhead
+
+The RVV store implementation maintains old and new byte values so that memory changes can be reversed and reapplied.
+
+This bookkeeping is part of the measured memory-operation time.
+
+### 5.3 Direct source-byte collection reduced measured overhead
+
+Constructing `new_bytes_vec` directly from the source vector bytes eliminated the additional byte-extraction pass.
+
+The store-only benchmark showed an approximately 4.26% lower average after this change, although further repeated measurements would be needed to establish the consistency of the improvement.
+
+### 5.4 Existing cache behavior was preserved
+
+The optimization was restricted to the RVV-specific implementation.
+
+No changes were made to the existing cache policies, memory-controller interfaces or general memory access behavior.
+
+## 6. Files modified or added
+
+| File | Work performed |
+|---|---|
+| `src/processor/rvss/rvss_processor.h` | RVV timing fields and getter declarations |
+| `src/processor/rvss/rvss_processor.cpp` | Scoped timing, profiling updates and RVV store-path optimization |
+| `src/processor/processor_manager.h` | RVV profiling getter declarations |
+| `src/processor/processor_manager.cpp` | Getter forwarding and terminal profiling report |
+| `examples/rvv_large_add_test.s` | Large vector addition benchmark |
+| `examples/rvv_store_only_test.s` | Store-only benchmark |
+| `examples/rvv_load_only_test.s` | Load-only benchmark |
+
+## 7. Conclusion
+
+Today's work established a profiling and benchmarking setup for the RVV implementation in Kites.
+
+The simulator can now report RVV instruction counts, processed elements, memory traffic and host-side execution timings.
+
+Three dedicated workloads were used to examine vector addition, repeated stores and repeated loads.
+
+A small RVV-specific store-path optimization was implemented while preserving existing memory and undo/redo behavior. The store-only benchmark showed a modest improvement in average measured time.
+
+The measurements indicate that vector memory operations deserve further optimization and profiling attention. The profiling infrastructure now provides a basis for evaluating future changes quantitatively rather than relying only on assumptions about performance.

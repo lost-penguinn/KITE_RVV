@@ -1,0 +1,158 @@
+Kites RVV Progress Report — Latest Update
+16 November 2026 · Changes and findings since the previous report
+1. Implementation changes
+A. RVV vector-store profiling
+We added more detailed timing instrumentation to RVSSProcessor::WriteVectorMemory().
+
+Three separate measurements are now collected:
+Counter	What it measures
+rvv_peek_time_ns_	Time spent capturing old memory bytes using peekByte()
+rvv_write_time_ns_	Time spent inside memory_controller_.writeWord()
+rvv_undo_time_ns_	Time spent comparing old/new bytes and recording undo information
+
+These measurements are exposed through getters in RVSSProcessor and ProcessorManager.
+
+The profiling report now prints these measurements alongside overall vector execution and memory times.
+B. Scalar SD profiling
+To establish a baseline using existing scalar instructions, we added two counters to RVSSProcessor:
+uint64_t scalar_sd_write_time_ns_{};
+uint64_t scalar_sd_total_time_ns_{};
+
+
+Their getters were added to both RVSSProcessor and ProcessorManager.
+
+We instrumented the case 0b011 branch (SD) inside RVSSProcessor::WriteMemory().
+
+The measurements capture:
+- SD write time: time spent inside memory_controller_.writeDoubleWord().
+- SD total time: time from the beginning of old-byte capture through the end of new-byte capture.
+The profiling report now prints a separate scalar SD section.
+C. Counter reset
+We added reset statements to RVSSProcessor::Reset():
+scalar_sd_write_time_ns_ = 0;
+scalar_sd_total_time_ns_ = 0;
+
+
+The existing RVV phase counters are also reset there.
+D. Build verification
+Build successful
+The project rebuilt successfully after the profiling changes.
+
+2. Benchmark workloads
+We used two store-only workloads, both configured to write 1024 bytes.
+Scalar workload
+128
+sd instructions
+- 8 bytes per instruction
+- 1024 bytes written
+- File: examples/scalar_sd_store_test.s
+
+  RVV workload
+64
+vse32.v instructions
+- VL = 4 elements per instruction
+- 4 bytes per element
+- 256 element stores
+- 1024 bytes written
+- File: examples/rvv_store_only_test.s
+
+Both benchmarks were run using the Release build.
+
+3. Scalar benchmark results
+Five measurements were collected for the scalar SD workload.
+Run	SD write time	SD total time
+1	3.120 ms	3.504 ms
+2	3.114 ms	3.503 ms
+3	2.740 ms	3.072 ms
+4	2.886 ms	3.245 ms
+5	3.151 ms	3.528 ms
+Mean	3.002 ms	3.370 ms
+
+The SD write phase accounts for approximately 89% of the total measured path.
+
+4. RVV benchmark results
+Five overall vector-memory measurements:
+Run	Vector memory time
+1	3.091 ms
+2	3.140 ms
+3	3.185 ms
+4	2.971 ms
+5	2.820 ms
+Mean	3.041 ms
+
+The three separately reported RVV write-phase measurements collected so far:
+Run	RVV write time
+1	2.549 ms
+2	2.771 ms
+3	3.030 ms
+Mean	2.783 ms
+
+We still need two more RVV write-phase measurements for a five-run comparison.
+
+5. Scalar versus RVV comparison
+Mean measured write-phase time
+1024 bytes written in each workload. RVV currently has three measurements; scalar has five.
+
+
+0 ms0.8 ms1.6 ms2.4 ms3.2 msScalar SDRVV stores
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The current RVV write-phase mean is approximately 7.3% lower than the scalar SD write-phase mean.
+
+This is an encouraging preliminary result, not yet proof of a vectorization speedup.
+
+Important differences:
+- Scalar uses 128 calls to writeDoubleWord().
+- RVV uses 256 calls to writeWord().
+- Both write 1024 bytes.
+- The scalar and RVV timers have slightly different boundaries.
+- We have five scalar write measurements but only three RVV write measurements.
+Consequently, the comparison should be treated as an initial performance observation.
+
+6. Important findings
+Finding 1: The cache/memory path is a major cost
+Scalar SD also spends most of its measured time inside the shared memory-controller/cache write path.
+
+This suggests that the relatively high RVV store time is not necessarily caused by inefficient RVV-specific implementation.
+Finding 2: RVV does not show an obvious performance penalty
+For the same total number of bytes written, the current RVV write-phase measurements are comparable to the scalar measurements.
+
+This is promising for the implementation.
+Finding 3: Existing cache behavior should remain untouched
+We inspected the existing cache implementation and established that:
+- MemoryController::writeWord() delegates to the L1 cache and emits memoryUpdated.
+- MemoryController::writeDoubleWord() follows the analogous path.
+- Cache writes involve existing hit/miss handling, cache-line updates, write-through behavior, and UI notification.
+- peekByte() is intentionally non-mutating and is necessary for undo bookkeeping.
+We have not modified cache.cpp or changed the existing cache policies.
+
+7. Current optimization status
+Area	Status
+RVV profiling	Implemented
+Scalar SD profiling	Implemented
+Profiling counter resets	Implemented
+Release build	Verified
+Scalar/RVV benchmark comparison	Initial results collected
+Five-run RVV write-phase comparison	3 of 5 collected
+Cache subsystem modifications	Not performed
+Further RVV store optimization	Pending measurement
+
+8. Next steps
+1. Collect two additional RVV write-phase measurements.
+2. Calculate the five-run mean, median, and variation for both workloads.
+3. Compare the RVV and scalar write phases while accounting for different call widths.
+4. Use the phase timings to identify whether any remaining RVV-specific overhead is worth optimizing.
+5. Preserve existing cache semantics, undo/redo behavior, UI notifications, and scalar instruction behavior.
+Overall assessment: We have moved from guessing about RVV store performance to measuring it at multiple levels. The current evidence suggests that much of the store cost is shared with the existing scalar memory subsystem, and the RVV path is already competitive in these preliminary tests.

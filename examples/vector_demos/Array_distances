@@ -1,0 +1,67 @@
+
+.data
+A:
+    .word 1, 2, 3, 4, 5, 6, 7, 8
+
+B:
+    .word 2, 4, 6, 8, 4, 5, 6, 7
+
+result:
+    .word 0
+
+temp:
+    .word 0
+
+.text
+main:
+    la a0, A
+    la a1, B
+    la a2, temp
+    la a3, result
+
+    li t3, 0          # accumulated distance
+    li t4, 2          # two batches of four elements
+
+    li t1, 4
+    vsetvli t0, t1, 208
+
+loop:
+    # Load four elements from each array
+    vle32.v v1, (a0)
+    vle32.v v2, (a1)
+
+    # Calculate A - B
+    vsub.vv v3, v1, v2
+
+    # Square the differences
+    vmul.vv v4, v3, v3
+
+    # Reduce four squared differences into one value
+    vmv.v.i v5, 0
+    vredsum.vs v6, v4, v5
+
+    # Extract reduction result through vector memory
+    li t1, 1
+    vsetvli t0, t1, 208
+    vse32.v v6, (a2)
+    lw t5, 0(a2)
+
+    # Accumulate partial distance
+    add t3, t3, t5
+
+    # Move to next four elements
+    addi a0, a0, 16
+    addi a1, a1, 16
+
+    # Restore VL = 4
+    li t1, 4
+    vsetvli t0, t1, 208
+
+    addi t4, t4, -1
+    bne t4, zero, loop
+
+    # Store final distance
+    sw t3, 0(a3)
+
+end:
+    j end

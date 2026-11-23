@@ -1,0 +1,65 @@
+
+
+Initial source vector:
+v1 = [10, 20, 30, 40]
+
+Initial accumulator:
+v2 = [5, 5, 5, 5]
+
+Reduction operations use the first element of v2 as the initial accumulator (5).
+
+1. vredsum.vs v3, v1, v2
+   5 + 10 + 20 + 30 + 40 = 105
+   Result: v3[0] = 105
+
+2. vredand.vs v4, v1, v2
+   5 AND 10 AND 20 AND 30 AND 40 = 0
+   Result: v4[0] = 0
+
+3. vredor.vs v5, v1, v2
+   5 OR 10 OR 20 OR 30 OR 40 = 63
+   Result: v5[0] = 63
+
+4. vredxor.vs v6, v1, v2
+   5 XOR 10 XOR 20 XOR 30 XOR 40 = 57
+   Result: v6[0] = 57
+
+5. vredmin.vs v7, v1, v2
+   MIN(5, 10, 20, 30, 40) = 5
+   Result: v7[0] = 5
+
+6. vredmax.vs v8, v1, v2
+   MAX(5, 10, 20, 30, 40) = 40
+   Result: v8[0] = 40
+
+7. vredminu.vs v9, v1, v2
+   Unsigned minimum = 5
+   Result: v9[0] = 5
+
+8. vredmaxu.vs v10, v1, v2
+   Unsigned maximum = 40
+   Result: v10[0] = 40
+
+
+FINAL RESULTS:
+
+v3 = [105, 0, 0, 0]
+v4 = [0, 0, 0, 0]
+v5 = [63, 0, 0, 0]
+v6 = [57, 0, 0, 0]
+v7 = [5, 0, 0, 0]
+v8 = [40, 0, 0, 0]
+v9 = [5, 0, 0, 0]
+v10 = [40, 0, 0, 0]
+
+
+MEMORY STORAGE:
+
+0x2200 -> v3 = [105, 0, 0, 0]
+0x2210 -> v4 = [0, 0, 0, 0]
+0x2220 -> v5 = [63, 0, 0, 0]
+0x2230 -> v6 = [57, 0, 0, 0]
+0x2240 -> v7 = [5, 0, 0, 0]
+0x2250 -> v8 = [40, 0, 0, 0]
+0x2260 -> v9 = [5, 0, 0, 0]
+0x2270 -> v10 = [40, 0, 0, 0]

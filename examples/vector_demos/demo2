@@ -1,0 +1,64 @@
+main:
+    # Configure e32, m1, four active lanes
+    vsetvli t3, zero, 208
+
+    # Initialize source array A at 0x2000
+    lui t0, 0x2
+
+    addi t1, x0, 10
+    sw t1, 0(t0)
+
+    addi t1, x0, 20
+    sw t1, 4(t0)
+
+    addi t1, x0, 30
+    sw t1, 8(t0)
+
+    addi t1, x0, 40
+    sw t1, 12(t0)
+
+    # Load source vector
+    vle32.v v1, (t0)
+
+    # Initialize accumulator vector v2
+    vmv.v.i v2, 5
+
+    # Reduction operations
+    vredsum.vs  v3, v1, v2
+    vredand.vs  v4, v1, v2
+    vredor.vs   v5, v1, v2
+    vredxor.vs  v6, v1, v2
+    vredmin.vs  v7, v1, v2
+    vredmax.vs  v8, v1, v2
+    vredminu.vs v9, v1, v2
+    vredmaxu.vs v10, v1, v2
+
+    # Store results starting at 0x2200
+    lui t2, 0x2
+    addi t2, t2, 0x200
+
+    vse32.v v3, (t2)
+
+    addi t2, t2, 16
+    vse32.v v4, (t2)
+
+    addi t2, t2, 16
+    vse32.v v5, (t2)
+
+    addi t2, t2, 16
+    vse32.v v6, (t2)
+
+    addi t2, t2, 16
+    vse32.v v7, (t2)
+
+    addi t2, t2, 16
+    vse32.v v8, (t2)
+
+    addi t2, t2, 16
+    vse32.v v9, (t2)
+
+    addi t2, t2, 16
+    vse32.v v10, (t2)
+
+end:
+    addi x0, x0, 0

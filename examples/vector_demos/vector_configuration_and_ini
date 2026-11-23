@@ -1,0 +1,6 @@
+li t1, 4
+vsetvli t0, t1, 208
+
+vmv.v.i v1, 5
+li t2, 9
+vmv.v.x v2, t2
